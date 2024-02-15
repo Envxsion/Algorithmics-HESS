@@ -1,4 +1,5 @@
 import random
+import math
 # This code creates two random numbers between 1 and 50
 first = random.randint(1,50)
 second = random.randint(1,50)
@@ -20,5 +21,5 @@ even = print("1") if (first % 2 == 0) else print("2") if (second % 2 == 0) else 
 div = print("True") if larger % smaller else print(larger % smaller)
 # 5. If the two sides are the hypotenuse and shorter side of a right angled triangle,
 #    find the length of the other shorter side.
-short_side = print(larger**2 - smaller**2)
+short_side = print(math.sqrt(larger**2 - smaller**2))
 # Run your code multiple times to make sure it works as expected.
