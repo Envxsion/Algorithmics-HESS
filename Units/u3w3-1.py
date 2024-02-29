@@ -5,10 +5,10 @@ cells = [False] * 501
 for i in range(2, 501):
     for j in range(i, 501, i):
         cells[j] = not cells[j]
-print(cells[225])
-print(cells[484])
-print(cells[170])
-print(cells[499])
+#print(cells[225])
+#print(cells[484])
+#print(cells[170])
+#print(cells[499])
 print("Locked Cells: ", sum(1 for cell in cells if cell))
 
 
