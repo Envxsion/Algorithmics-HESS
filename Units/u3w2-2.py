@@ -13,7 +13,7 @@ def bin2dec(m):
     #return the int(m, 2) oneliner works too
     dec= 0
     for digit in m:
-        dec= dec* 2 + int(digit)
+        dec= dec * 2 + int(digit)
     return dec
 
 

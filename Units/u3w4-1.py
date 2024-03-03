@@ -1,86 +1,53 @@
-from bokeh.plotting import figure, show
-from bokeh.models import HoverTool, LabelSet, ColumnDataSource
-from bokeh.palettes import Viridis256
+'''Use Python to create a small network with five nodes and some edges with weights. (Choose your own scenario – be creative.) Display the output using matplotlib.'''
+import networkx as nx
+import matplotlib.pyplot as plt
 
-# Define user data with profiles
-users = {
-    "Alice": "gay"
+G = nx.Graph()
+friends = {
+    'Alice': {'strength': 8, 'mutual_friends': ['Bob', 'Charlie']},
+    'Bob': {'strength': 7, 'mutual_friends': ['Alice', 'Charlie']},
+    'Charlie': {'strength': 6, 'mutual_friends': ['Alice', 'Bob', 'David']},
+    'David': {'strength': 5, 'mutual_friends': ['Charlie', 'Eve']},
+    'Eve': {'strength': 4, 'mutual_friends': ['Bob', 'Charlie']}
 }
 
-# Define connections and their strength
-edges = [
-    ("Alice", "Bob", 2),
-    ("Alice", "Charlie", 4),
-    ("Bob", "Charlie", 3),
-    ("Bob", "Diana", 1),
-    ("Charlie", "Diana", 2),
-    ("Diana", "Eve", 3),
+for friend, data in friends.items():
+    G.add_node(friend, **data)
+edges_with_weights = [
+    ('Alice', 'Bob', {'weight': 7}),
+    ('Alice', 'Charlie', {'weight': 5}),
+    ('Alice', 'David', {'weight': 3}),
+    ('Bob', 'Charlie', {'weight': 6}),
+    ('Bob', 'David', {'weight': 8}),
+    ('Bob', 'Eve', {'weight': 4}),
+    ('Charlie', 'David', {'weight': 9}),
+    ('Charlie', 'Eve', {'weight': 2}),
+    ('David', 'Eve', {'weight': 5})
 ]
 
-# Convert data to dictionary for Bokeh
-data = {"users": users, "edges": edges}
+G.add_edges_from(edges_with_weights)
+pos = nx.spring_layout(G)  
+nodes = nx.draw_networkx_nodes(G, pos, node_size=700, node_color='skyblue')
+edges = nx.draw_networkx_edges(G, pos, width=2)
+edge_labels = nx.get_edge_attributes(G, 'weight')
+nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels, font_size=12)
 
-# Create a ColumnDataSource for user data
-source = ColumnDataSource(data)
 
-# Define a figure for the plot
-p = figure(
-    title="Social Network with Connections, Interests, and Recommendations",
-    x_range=[min(p.x_range.start, min(x for x, _ in source.data["source"].values())),
-             max(p.x_range.end, max(x for x, _ in source.data["source"].values()))],
-    y_range=[min(p.y_range.start, min(y for _, y in source.data["source"].values())),
-             max(p.y_range.end, max(y for _, y in source.data["source"].values()))],
-    tools="",  # Remove default zoom and pan tools
-)
+node_labels = nx.get_node_attributes(G, 'strength')
+nx.draw_networkx_labels(G, pos, labels=node_labels, font_size=12, font_color='darkblue')
 
-# Create circles for nodes with colors and sizes based on connections
-p.circle(
-    x="x",
-    y="y",
-    source=source,
-    size="connections",
-    fill_color="color",
-    line_color="black",
-    hover_fill_alpha=0.7,  # Reduce fill opacity on hover
-)
 
-# Label nodes with user names
-labels = LabelSet(
-    x="x",
-    y="y",
-    text="name",
-    level="glyph",
-    x_offset=5,
-    y_offset=5,
-    source=source,
-    text_align="left",
-    text_baseline="middle",
-)
-p.add_layout(labels)
+def on_hover(event):
+    if event.inaxes == plt.gca():
+        x, y = event.xdata, event.ydata
+        for node in G.nodes():
+            xx, yy = pos[node]
+            if (x - xx) ** 2 + (y - yy) ** 2 < 0.01:  # Check if the mouse is close to the node
+                plt.gca().set_title(f"{node}\nStrength: {friends[node]['strength']}\nMutual Friends: {', '.join(friends[node]['mutual_friends'])}")
+                plt.draw()
+                return
 
-# Draw edges
-p.edge(
-    x0="x",
-    y0="y",
-    x1="x",
-    y1="y",
-    source=source,
-    line_width=0.5,
-    line_color="gray",
-    alpha=0.7,
-)
-
-# Hover tool to display user information
-hover = HoverTool()
-
-hover.tooltips = [
-    ("Name", "@name"),
-    ("Interests", "@interests"),
-    ("Location", "@location"),
-    ("Connections", "@connections"),
-]
-
-p.add_tools(hover)
-
-# Display the interactive plot
-show(p)
+plt.gcf().canvas.mpl_connect('motion_notify_event', on_hover)
+plt.title("Friendship Network")
+plt.axis('off')
+plt.show()
