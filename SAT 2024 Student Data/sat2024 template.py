@@ -48,7 +48,7 @@ class Graph:
     # You should not need to change this function.
 
     # Read the nodes, create node objects and add them to the node list.
-    with open("SAT 2024 Student Data/nodes.csv", 'r', encoding='utf-8-sig') as csvfile:
+    with open("nodes.csv", 'r', encoding='utf-8-sig') as csvfile:
       csv_reader = csv.reader(csvfile)
       for row in csv_reader:
         name = row[0]
@@ -60,21 +60,21 @@ class Graph:
         self.nodes.append(node)
         
     # Read the edges, create edge objects and add them to the edge list.
-    with open("SAT 2024 Student Data/nodes.csv", "r", encoding='utf-8-sig') as csvfile:
+    with open("edges.csv", "r", encoding='utf-8-sig') as csvfile:
       csv_reader = csv.reader(csvfile)
       for row in csv_reader:
         place1 = row[0]
         place2 = row[1]
         dist = int(row[2])
-        time = int(float(row[3]))
+        time = int(row[3])
         edge = Edge(place1, place2, dist, time)
         self.edges.append(edge)
         
-    for node in self.nodes:
-      if node.name == place1:
-        node.add_neighbour(place2)
-      if node.name == place2:
-        node.add_neighbour(place1)
+        for node in self.nodes:
+          if node.name == place1:
+            node.add_neighbour(place2)
+          if node.name == place2:
+            node.add_neighbour(place1)
     
        
 
@@ -169,3 +169,4 @@ original.display("map.png")
 
 # You will add your own functions under the Graph object and call them in this way:
 #original.findpath("Alexandra")
+
