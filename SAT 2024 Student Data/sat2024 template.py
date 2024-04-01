@@ -48,7 +48,7 @@ class Graph:
     # You should not need to change this function.
 
     # Read the nodes, create node objects and add them to the node list.
-    with open("nodes.csv", 'r', encoding='utf-8-sig') as csvfile:
+    with open("SAT 2024 Student Data/nodes.csv", 'r', encoding='utf-8-sig') as csvfile:
       csv_reader = csv.reader(csvfile)
       for row in csv_reader:
         name = row[0]
@@ -60,7 +60,7 @@ class Graph:
         self.nodes.append(node)
         
     # Read the edges, create edge objects and add them to the edge list.
-    with open("edges.csv", "r", encoding='utf-8-sig') as csvfile:
+    with open("SAT 2024 Student Data/edges.csv", "r", encoding='utf-8-sig') as csvfile:
       csv_reader = csv.reader(csvfile)
       for row in csv_reader:
         place1 = row[0]
