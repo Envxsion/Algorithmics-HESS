@@ -163,7 +163,8 @@ class Graph:
             current_node = town
         print(f"This will take a total of {total_time} mins to cover {total_distance} km.")
     def findpath(self, target):
-        start_node = self.nodes[0]  # Assuming Bendigo is the first node
+        start_node = self.nodes[8]  #Bendigo 
+        print("Start Node:" + str(start_node.name))
         target_node = next((node for node in self.nodes if node.name == target), None)
         if target_node is None:
             print(f"Target town '{target}' not found.")
@@ -200,16 +201,12 @@ class Graph:
             print(f"Travel to {target_node.name} via {', '.join(path)}, taking {total_time} mins to drive {total_distance} km.")
         else:
             print("Unable to find a path to the target town.")
-# Create a new graph object called 'original'
+
+
 original = Graph()
-
-# Load data into that object
 original.load_data()
-
-# Display the object, also saving to map.png
 original.display("map.png")
 
-#Example usage
 target_town = "Mildura"
 radius = 100
 
@@ -226,5 +223,4 @@ print()
 
 original.vaccinate(target_town, radius)
 print()
-
 original.searchteam(target_town, radius)
