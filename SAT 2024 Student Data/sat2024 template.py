@@ -155,16 +155,17 @@ class Graph:
         current_node = start_node
         print("The medical team should visit towns in this order:")
         for town in vaccination_order:
-            distance = self.dijkstra(current_node, town)
+            distance = self.dijkstra(current_node, town)  # Changed this line
             total_distance += distance
             time = self.get_dist(current_node.name, town.name)
             total_time += time
             print(f"{town.name} (Distance: {distance} km, Time: {time} mins)")
-            current_node = town
+            current_node = town  # Changed this line
         print(f"This will take a total of {total_time} mins to cover {total_distance} km.")
+
     def findpath(self, target):
-        start_node = self.nodes[8]  #Bendigo 
-        print("Start Node:" + str(start_node.name))
+        start_node = self.nodes[8]  # Bendigo
+        print("Start Node:", start_node.name)
         target_node = next((node for node in self.nodes if node.name == target), None)
         if target_node is None:
             print(f"Target town '{target}' not found.")
@@ -175,20 +176,52 @@ class Graph:
         current_node = start_node
         total_distance = 0
         total_time = 0
+
+        def find_next_node(current_node, visited, path):
+            unvisited_neighbors = [neighbor for neighbor in current_node.neighbours if neighbor not in visited and neighbor not in path]
+            if not unvisited_neighbors:
+                return None
+            return min(unvisited_neighbors, key=lambda neighbor: self.get_dist(current_node.name, neighbor))
+
         while current_node != target_node:
             visited.add(current_node)
-            unvisited_neighbors = [neighbor for neighbor in current_node.neighbours if neighbor not in visited and neighbor not in path] #working fix for melton sunbury issue (added not in path check)
-            if not unvisited_neighbors:
-                print(f"Unable to reach {target_node.name} from {start_node.name}.")
-                break
+            try:
+                print("Visited Neighbors:", ', '.join(neighbor.name for neighbor in visited))
+            except:
+                pass
 
-            next_node = min(unvisited_neighbors, key=lambda neighbor: self.get_dist(current_node.name, neighbor))
-            print(next_node)
+            print("Current Node: ", current_node.name)
+            unvisited_neighbors = [neighbor for neighbor in current_node.neighbours if neighbor not in visited and neighbor not in path]
+            print("Unvisited Neighbors:", unvisited_neighbors)
+            if not unvisited_neighbors:
+                if not path:
+                    print(f"Unable to reach {target_node.name} from {start_node.name}.")
+                    return
+                # Backtrack
+                while path and path[-1] in visited:
+                    previous_node = path.pop()
+                    print("Previous Node:", previous_node.name)
+                    print("Backtracking from", current_node.name, "to", previous_node)
+                    total_distance -= self.get_dist(previous_node, current_node.name)
+                    current_node = next((node for node in self.nodes if node.name == previous_node), None)
+
+                if not path:
+                    print(f"Unable to reach {target_node.name} from {start_node.name}.")
+                    return
+
+                continue
+
+            next_node = find_next_node(current_node, visited, path)
+            print("Next Node:", next_node)
+            if next_node is None:
+                print(f"Unable to reach {target_node.name} from {start_node.name}.")
+                return
+
             next_node_obj = next((node for node in self.nodes if node.name == next_node), None)
 
             if next_node_obj is None:
                 print(f"Node '{next_node}' not found.")
-                break
+                return
 
             path.append(next_node)
             distance = self.get_dist(current_node.name, next_node)
@@ -197,17 +230,22 @@ class Graph:
             total_time += time
             current_node = next_node_obj
 
-        if current_node == target_node:
-            print(f"Travel to {target_node.name} via {', '.join(path)}, taking {total_time} mins to drive {total_distance} km.")
-        else:
-            print("Unable to find a path to the target town.")
+            # Reset visited set within the current path
+            visited.clear()
+            visited.update(path)
+
+        print(f"Travel to {target_node.name} via {', '.join(path)}, taking {total_time} mins to drive {total_distance} km.")
+
+
+
+
 
 
 original = Graph()
 original.load_data()
 original.display("map.png")
 
-target_town = "Mildura"
+target_town = "Sunbury"
 radius = 100
 
 print(f"Input: {target_town}, {radius}")
