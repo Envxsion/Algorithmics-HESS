@@ -190,8 +190,9 @@ class PangobatResponseManager:
         self.visualize_network()
 
     def visualize_network(self):
+        plt.figure(figsize=(20,16))
         pos = {node['name']: (node['longitude'], node['latitude']) for node in self.response_force.nodes.values()}
-        nx.draw(self.response_force.graph, pos, with_labels=True, node_size=100, font_size=8)
+        nx.draw(self.response_force.graph, pos, with_labels=True, node_size=100, font_size=10)
         plt.show()
 
 # Example usage
