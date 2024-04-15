@@ -2,6 +2,7 @@ import csv
 import math
 import networkx as nx
 import matplotlib.pyplot as plt
+import random
 from collections import defaultdict
 from heapq import heappush, heappop
 
@@ -31,7 +32,8 @@ class PangobatResponseForce:
                     'income': int(income),
                     'latitude': lat,
                     'longitude': long,
-                    'average_age': float(age)
+                    'average_age': float(age),
+                    'pangobat_virus': False  # Initialize Pangobat virus tag to False
                 }
                 nodes[name] = node
         return nodes
@@ -129,9 +131,14 @@ class SearchTeam:
 
     def search_for_pangobat(self, target_location, radius):
         print(f"SearchTeam: Searching for Pangobat within {radius} of {target_location}")
+        pangobat_towns = []
         for node in self.nodes.values():
             if self.response_force.haversine(node['latitude'], node['longitude'], self.nodes[target_location]['latitude'], self.nodes[target_location]['longitude']) <= radius:
                 print(f"SearchTeam: Searching {node['name']} for Pangobat")
+                if node['pangobat_virus']:
+                    pangobat_towns.append(node['name'])
+        if pangobat_towns:
+            print(f"Pangobat virus detected in the following towns: {', '.join(pangobat_towns)}")
 
 class SanitationTeam:
     def __init__(self, response_force, nodes, edges, graph):
@@ -163,12 +170,31 @@ class PangobatResponseManager:
         # Deploy the sanitation team
         self.response_force.sanitation_team.sanitize_roads(target_location, radius)
 
+        # Randomly tag some towns with the Pangobat virus tag within the radius
+        infected_towns = []
+        for node in self.response_force.nodes.values():
+            if self.response_force.haversine(node['latitude'], node['longitude'], self.response_force.nodes[target_location]['latitude'], self.response_force.nodes[target_location]['longitude']) <= radius:
+                if random.random() < 0.5:  # Adjust the probability as needed
+                    node['pangobat_virus'] = True
+                    infected_towns.append(node['name'])
+        if infected_towns:
+            print(f"Pangobat virus detected in the following towns: {', '.join(infected_towns)}")
+
         # Print the shortest path to the target location
         path, distance, travel_time = self.response_force.dijkstra_shortest_path('Bendigo', target_location)
         print(f"Shortest path from Bendigo to {target_location}: {' -> '.join(path)}")
         print(f"Distance: {distance:.2f} km")
         print(f"Travel time: {travel_time:.2f} minutes")
 
+        # Visualize the network
+        self.visualize_network()
+
+    def visualize_network(self):
+        plt.figure(figsize=(20,16))
+        pos = {node['name']: (node['longitude'], node['latitude']) for node in self.response_force.nodes.values()}
+        nx.draw(self.response_force.graph, pos, with_labels=True, node_size=100, font_size=10)
+        plt.show()
+
 # Example usage
 pangobat_response_manager = PangobatResponseManager('SAT 2024 Student Data/nodes.csv', 'SAT 2024 Student Data/edges.csv')
-pangobat_response_manager.respond_to_pangobat_sighting('Ouyen', 100)
+pangobat_response_manager.respond_to_pangobat_sighting('Alexandra', 150)
