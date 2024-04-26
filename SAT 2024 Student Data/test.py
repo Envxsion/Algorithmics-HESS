@@ -163,27 +163,6 @@ class SearchTeam:
         self.edges = edges
         self.graph = graph
 
-    def search_for_pangobat(self, target_location, radius):
-        print(f"SearchTeam: Searching for Pangobat within {radius} of {target_location}")
-        search_teams = []
-        for node in self.nodes.values():
-            if self.response_force.haversine(node['latitude'], node['longitude'], self.nodes[target_location]['latitude'], self.nodes[target_location]['longitude']) <= radius:
-                search_teams.append(node['name'])
-
-        for i, town in enumerate(search_teams):
-            print(f"SearchTeam{i+1}: Searching {town} for Pangobat")
-            if self.nodes[town]['pangobat_virus']:
-                print(f"SearchTeam{i+1}: Pangobat Virus Found in {town}!")
-            else:
-                print(f"SearchTeam{i+1}: No Pangobat Virus found in {town}")
-
-class SanitationTeam:
-    def __init__(self, response_force, nodes, edges, graph):
-        self.response_force = response_force
-        self.nodes = nodes
-        self.edges = edges
-        self.graph = graph
-
     def tsp(self, start):
         unvisited = set(self.nodes.keys())
         unvisited.remove(start)
@@ -209,41 +188,79 @@ class SanitationTeam:
 
         return path, total_distance, total_travel_time
 
+    def search_for_pangobat(self, radius):
+        print(f"SearchTeam: Searching for Pangobat within {radius} of all towns")
+        start_location = 'Bendigo'
+
+        # Use the TSP approach to find the optimal path for searching
+        path, total_distance, total_travel_time = self.tsp(start_location)
+
+        # Output the path and details
+        search_path_msg = f"SearchTeam: Searching towns using path: {' -> '.join(path)}\n"
+        for town in path[:-1]:  # Exclude the last town (Bendigo) since it's already printed in the path
+            if self.nodes[town]['pangobat_virus']:
+                search_path_msg += f"{town}: Pangobat Virus Found\n"
+            else:
+                search_path_msg += f"{town}: No Pangobat Virus found\n"
+
+        print(search_path_msg)
+        print(f"SearchTeam: Total distance: {total_distance:.2f} km, Total travel time: {total_travel_time:.2f} minutes")
+
+        print("SearchTeam: Search process complete")
+
+class SanitationTeam:
+    def __init__(self, response_force, nodes, edges, graph):
+        self.response_force = response_force
+        self.nodes = nodes
+        self.edges = edges
+        self.graph = graph
+
+    def nearest_neighbor_route(self, start):
+        unvisited = set(self.nodes.keys())
+        unvisited.remove(start)
+        current = start
+        path = [start]
+        total_distance = 0
+        total_travel_time = 0
+
+        while unvisited:
+            next_node = min(unvisited, key=lambda x: self.response_force.get_distance_and_travel_time(current, x)[0])
+            distance, travel_time = self.response_force.get_distance_and_travel_time(current, next_node)
+            total_distance += distance
+            total_travel_time += travel_time
+            path.append(next_node)
+            unvisited.remove(next_node)
+            current = next_node
+
+        # Add the last edge to return to the starting point
+        distance, travel_time = self.response_force.get_distance_and_travel_time(path[-1], start)
+        total_distance += distance
+        total_travel_time += travel_time
+
+        return path, total_distance, total_travel_time
+
     def sanitize_roads(self):
         print("SanitationTeam: Sanitizing all roads on the map")
 
         # Choose a starting location (e.g., Bendigo)
         start_location = 'Bendigo'
 
-        # Use the TSP approach to find the optimal path for sanitizing roads
-        path, total_distance, total_travel_time = self.tsp(start_location)
+        # Use the Nearest Neighbor Algorithm to find the optimal path for sanitizing roads
+        path, total_distance, total_travel_time = self.nearest_neighbor_route(start_location)
 
         # Output the path and details
-        sanitized_path_msg = ""
-        i = 0
-        while i < len(path) - 1:
+        sanitized_path_msg = "Sanitation Route:\n"
+        for i in range(len(path) - 1):
             place1 = path[i]
             place2 = path[i + 1]
             distance, travel_time = self.response_force.get_distance_and_travel_time(place1, place2)
             sanitized_path_msg += f"{place1} -> {place2} (distance: {distance:.2f} km, travel time: {travel_time:.2f} minutes)\n"
-            # Check if there are unvisited towns ahead
-            if i + 2 < len(path):
-                next_place = path[i + 2]
-                if next_place in self.response_force.nodes:
-                    i += 1
-                    continue
-            # Check for backtrack path
-            if i > 0:
-                backtrack_place1 = path[i]
-                backtrack_place2 = path[i - 1]
-                backtrack_distance, backtrack_travel_time = self.response_force.get_distance_and_travel_time(backtrack_place1, backtrack_place2)
-                sanitized_path_msg += f"{backtrack_place1} -> {backtrack_place2} (backtrack) (distance: {backtrack_distance:.2f} km, travel time: {backtrack_travel_time:.2f} minutes)\n"
-            i += 1
 
-        print(f"SanitationTeam: Sanitizing roads using path:\n{sanitized_path_msg}")
+        print(sanitized_path_msg)
         print(f"SanitationTeam: Total distance: {total_distance:.2f} km, Total travel time: {total_travel_time:.2f} minutes")
 
         print("SanitationTeam: Sanitation process complete")
+
 
 
 class PangobatResponseManager:
@@ -264,8 +281,9 @@ class PangobatResponseManager:
         # Deploy the medical team
         self.response_force.medical_team.vaccinate_population(target_location, radius)
 
+        
         # Deploy the search team
-        self.response_force.search_team.search_for_pangobat(target_location, radius)
+        self.response_force.search_team.search_for_pangobat(radius)
 
         # Deploy the sanitation team
         self.response_force.sanitation_team.sanitize_roads()  # Removed the parameters
@@ -282,4 +300,4 @@ class PangobatResponseManager:
 
 # Example usage
 pangobat_response_manager = PangobatResponseManager('SAT 2024 Student Data/nodes.csv', 'SAT 2024 Student Data/edges.csv')
-pangobat_response_manager.respond_to_pangobat_sighting('Alexandra', 150)
+pangobat_response_manager.respond_to_pangobat_sighting('Seymour', 110)
