@@ -124,13 +124,13 @@ class MedicalTeam:
         self.graph = graph
 
     def vaccinate_population(self, target_location, radius):
-        print(f"MedicalTeam: Going to Target Location ({target_location}) from Bendigo")
+        print(f"AllTeams: Going to Target Location ({target_location}) from Bendigo")
         path, distance, travel_time = self.response_force.dijkstra_shortest_path('Bendigo', target_location)
         if path is None:
-            print(f"MedicalTeam: No path found to Target Location ({target_location}), unable to proceed.")
+            print(f"AllTeams: No path found to Target Location ({target_location}), unable to proceed.")
             return
-        print(f"MedicalTeam: Going to Target Location using path: {' -> '.join(path)}")
-        print(f"MedicalTeam: Distance to Target Location: {distance:.2f} km, Travel Time: {travel_time:.2f} minutes")
+        print(f"AllTeams: Going to Target Location using path: {' -> '.join(path)}")
+        print(f"AllTeams: Distance to Target Location: {distance:.2f} km, Travel Time: {travel_time:.2f} minutes"+"\n")
 
         print(f"MedicalTeam: At Target Location ({target_location}), recalculating towns within radius:")
         towns_to_vaccinate = []
@@ -154,7 +154,7 @@ class MedicalTeam:
             print(f"MedicalTeam: No path found from Target Location to Bendigo, unable to return.")
             return
         print(f"MedicalTeam: Returning to Bendigo using path: {' -> '.join(path)}")
-        print(f"MedicalTeam: Distance to Bendigo: {distance:.2f} km, Travel Time: {travel_time:.2f} minutes")
+        print(f"MedicalTeam: Distance to Bendigo: {distance:.2f} km, Travel Time: {travel_time:.2f} minutes"+"\n")
 
 class SearchTeam:
     def __init__(self, response_force, nodes, edges, graph):
@@ -240,7 +240,7 @@ class SanitationTeam:
         return path, total_distance, total_travel_time
 
     def sanitize_roads(self):
-        print("SanitationTeam: Sanitizing all roads on the map")
+        print("\n"+"SanitationTeam: Sanitizing all roads on the map")
 
         # Choose a starting location (e.g., Bendigo)
         start_location = 'Bendigo'
@@ -277,7 +277,7 @@ class PangobatResponseManager:
                     node['pangobat_virus'] = True
                     infected_towns.append(node['name'])
         if infected_towns:
-            print(f"Pangobat virus detected in the following towns: {', '.join(infected_towns)}")
+            print(f"Pangobat virus detected in the following towns: {', '.join(infected_towns)}"+"\n")
         # Deploy the medical team
         self.response_force.medical_team.vaccinate_population(target_location, radius)
 
@@ -300,4 +300,4 @@ class PangobatResponseManager:
 
 # Example usage
 pangobat_response_manager = PangobatResponseManager('SAT 2024 Student Data/nodes.csv', 'SAT 2024 Student Data/edges.csv')
-pangobat_response_manager.respond_to_pangobat_sighting('Seymour', 110)
+pangobat_response_manager.respond_to_pangobat_sighting('Rye', 110)
