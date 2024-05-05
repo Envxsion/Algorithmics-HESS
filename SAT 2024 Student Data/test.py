@@ -4,35 +4,32 @@ import networkx as nx
 import matplotlib.pyplot as plt
 from heapq import heappush, heappop
 import random
+from itertools import permutations
+from collections import defaultdict
 
 class PangobatResponseForce:
     def __init__(self, nodes_file, edges_file):
         self.nodes = self.load_nodes(nodes_file)
         self.edges = self.load_edges(edges_file)
         self.graph = self.build_graph()
-        self.medical_team = MedicalTeam(self, self.nodes, self.edges, self.graph)
-        self.search_team = SearchTeam(self, self.nodes, self.edges, self.graph)
-        self.sanitation_team = SanitationTeam(self, self.nodes, self.edges, self.graph)
+        self.target_travel = AllTeams(self)
+        self.medical_team = MedicalTeam(self)
+        self.search_team = SearchTeam(self)
+        self.sanitation_team = SanitationTeam(self)
 
     def load_nodes(self, filename):
         nodes = {}
         with open(filename, 'r', encoding='utf-8-sig') as f:
             reader = csv.reader(f)
             for row in reader:
-                name = row[0]
-                pop = row[1]
-                income = row[2]
-                lat = float(row[3])
-                long = float(row[4])
-                age = row[5]
+                name, pop, income, lat, long, age = row
                 node = {
                     'name': name,
                     'population': int(pop),
                     'income': int(income),
-                    'latitude': lat,
-                    'longitude': long,
-                    'average_age': float(age),
-                    'pangobat_virus': False 
+                    'latitude': float(lat),
+                    'longitude': float(long),
+                    'average_age': float(age)
                 }
                 nodes[name] = node
         return nodes
@@ -42,15 +39,12 @@ class PangobatResponseForce:
         with open(filename, 'r', encoding='utf-8-sig') as f:
             reader = csv.reader(f)
             for row in reader:
-                place1 = row[0]
-                place2 = row[1]
-                dist = float(row[2])
-                time = float(row[3])
+                place1, place2, dist, time = row
                 edge = {
                     'place1': place1,
                     'place2': place2,
-                    'distance': dist,
-                    'travel_time': time
+                    'distance': float(dist),
+                    'travel_time': float(time)
                 }
                 edges.append(edge)
         return edges
@@ -64,7 +58,11 @@ class PangobatResponseForce:
         return G
 
     def haversine(self, lat1, lon1, lat2, lon2):
-        R = 6371.0
+        """
+        Calculate the distance between two latitude-longitude pairs using the Haversine formula.
+        """
+        R = 6371.0  # Earth radius in kilometers
+
         lat1_rad = math.radians(lat1)
         lon1_rad = math.radians(lon1)
         lat2_rad = math.radians(lat2)
@@ -116,152 +114,202 @@ class PangobatResponseForce:
         else:
             return distance, travel_time
 
-class MedicalTeam:
-    def __init__(self, response_force, nodes, edges, graph):
+class AllTeams:
+    def __init__(self, response_force):
         self.response_force = response_force
-        self.nodes = nodes
-        self.edges = edges
-        self.graph = graph
 
-    def vaccinate_population(self, target_location, radius):
-        print(f"AllTeams: Going to Target Location ({target_location}) from Bendigo")
+    def go(self, target_location, radius):
+        print(f"AllTeams: Deploying to Target Location: {target_location}")
         path, distance, travel_time = self.response_force.dijkstra_shortest_path('Bendigo', target_location)
         if path is None:
-            print(f"AllTeams: No path found to Target Location ({target_location}), unable to proceed.")
+            print(f"AllTeams: No path found to Target Location. Unable to proceed.")
             return
-        print(f"AllTeams: Going to Target Location using path: {' -> '.join(path)}")
-        print(f"AllTeams: Distance to Target Location: {distance:.2f} km, Travel Time: {travel_time:.2f} minutes"+"\n")
+        print(f"AllTeams: Deploying Teams to Target Location using path: {' -> '.join(path)}")
+        print(f"AllTeams: Distance to Target Location: {distance:.2f} km, Travel Time: {travel_time:.2f} minutes")
 
-        print(f"MedicalTeam: At Target Location ({target_location}), recalculating towns within radius:")
-        towns_to_vaccinate = []
-        for node_name, node in self.nodes.items():
-            if self.response_force.haversine(node['latitude'], node['longitude'], self.nodes[target_location]['latitude'], self.nodes[target_location]['longitude']) <= radius and node_name != target_location:
-                towns_to_vaccinate.append(node_name)
+class MedicalTeam:
+    def __init__(self, response_force):
+        self.response_force = response_force
 
-        towns_to_vaccinate.sort(key=lambda x: self.response_force.get_distance_and_travel_time(target_location, x)[0])  # Sort by distance from target location
-        for town in towns_to_vaccinate:
-            distance, travel_time = self.response_force.get_distance_and_travel_time(target_location, town)
-            if distance == float('inf'):
-                print(f"MedicalTeam: No path found to {town}, skipping vaccination.")
-                continue
-            print(f"MedicalTeam: Vaccinating {town} (distance: {distance:.2f} km, travel time: {travel_time:.2f} minutes)")
-            path, _, _ = self.response_force.dijkstra_shortest_path(target_location, town)
-            print(f"MedicalTeam: Going to {town} using path: {' -> '.join(path)}")
+    def travelling_salesman_problem(self, target_location, radius):
+        # Get all towns within the specified radius of the target location
+        towns_within_radius = []
+        for node_name, node in self.response_force.nodes.items():
+            if self.response_force.haversine(node['latitude'], node['longitude'], self.response_force.nodes[target_location]['latitude'], self.response_force.nodes[target_location]['longitude']) <= radius:
+                towns_within_radius.append(node_name)
 
-        print(f"MedicalTeam: Vaccinations Finished, returning to Bendigo")
-        path, distance, travel_time = self.response_force.dijkstra_shortest_path(target_location, 'Bendigo')
-        if path is None:
-            print(f"MedicalTeam: No path found from Target Location to Bendigo, unable to return.")
-            return
-        print(f"MedicalTeam: Returning to Bendigo using path: {' -> '.join(path)}")
-        print(f"MedicalTeam: Distance to Bendigo: {distance:.2f} km, Travel Time: {travel_time:.2f} minutes"+"\n")
+        # Calculate distances between towns
+        distances = {}
+        for town1 in towns_within_radius:
+            distances[town1] = {}
+            for town2 in towns_within_radius:
+                if town1 != town2:
+                    distance, _ = self.response_force.get_distance_and_travel_time(town1, town2)
+                    distances[town1][town2] = distance
+        print("Distances:", distances)  # Debugging print
+
+        memo = {}  # Memoization dictionary
+
+        # Solve TSP using dynamic programming (Held-Karp algorithm)
+        def held_karp(mask, pos, dist):
+            if mask == (1 << len(towns_within_radius)) - 1:
+                # Ensure that the target_location is considered in the distances dictionary
+                if target_location in distances[towns_within_radius[pos]]:
+                    return dist + distances[towns_within_radius[pos]][target_location]
+                else:
+                    return float('inf')
+        
+            if (mask, pos) in memo:
+                return memo[(mask, pos)]
+        
+            best = float('inf')
+            for i in range(len(towns_within_radius)):
+                if (mask & (1 << i)) == 0:
+                    # Ensure that both towns have distances calculated
+                    if towns_within_radius[i] in distances[towns_within_radius[pos]]:
+                        best = min(best, held_karp(mask | (1 << i), i, dist + distances[towns_within_radius[pos]][towns_within_radius[i]]))
+        
+            memo[(mask, pos)] = best
+            return best
+
+
+        # Find the optimal tour using permutations
+        best_tour = []
+        best_distance = float('inf')
+        for perm in permutations(towns_within_radius):
+            distance = held_karp(1, perm.index(target_location), 0)
+            if distance < best_distance:
+                best_distance = distance
+                best_tour = perm
+
+        return best_tour, best_distance
+
+
+    def vaccinate_population(self, target_location, radius):
+        print(f"MedicalTeam: Deploying to Target Location: {target_location}")
+
+        # Solve the Travelling Salesman Problem to find the optimal vaccination route
+        optimal_route, optimal_distance = self.travelling_salesman_problem(target_location, radius)
+
+        # Filter out non-infected towns from the optimal route
+        optimal_route = [town for town in optimal_route if self.response_force.nodes[town].get('pangobat_virus', False)]
+
+        # Deploy the medical team along the filtered optimal route
+        print(f"MedicalTeam: Vaccinating towns using optimal route: {' -> '.join(optimal_route)}")
+        total_travel_time = 0
+        for i in range(len(optimal_route) - 1):
+            town1 = optimal_route[i]
+            town2 = optimal_route[i + 1]
+            distance, travel_time = self.response_force.get_distance_and_travel_time(town1, town2)
+            total_travel_time += travel_time
+            print(f"MedicalTeam: Vaccinating {town2} (distance: {distance:.2f} km, travel time: {travel_time:.2f} minutes)")
+
+        print(f"MedicalTeam: Vaccinations Complete. Total travel time: {total_travel_time:.2f} minutes")
+
 
 class SearchTeam:
-    def __init__(self, response_force, nodes, edges, graph):
+    def __init__(self, response_force):
         self.response_force = response_force
-        self.nodes = nodes
-        self.edges = edges
-        self.graph = graph
+        self.search_team_size = 5  # Number of members in the search team
 
-    def tsp(self, start):
-        unvisited = set(self.nodes.keys())
-        unvisited.remove(start)
-        current = start
-        path = [start]
-        total_distance = 0
-        total_travel_time = 0
+    def recruit_search_team(self, location):
+        print(f"SearchTeam: Recruiting {self.search_team_size} members from {location} to assist in the search.")
+        return [f"Search Team Member {i}" for i in range(self.search_team_size)]
 
-        while unvisited:
-            next_node = min(unvisited, key=lambda x: self.response_force.get_distance_and_travel_time(current, x)[0])
-            distance, travel_time = self.response_force.get_distance_and_travel_time(current, next_node)
-            total_distance += distance
-            total_travel_time += travel_time
-            path.append(next_node)
-            unvisited.remove(next_node)
-            current = next_node
+    def search_town(self, location, search_team):
+        print(f"SearchTeam: Searching {location} with {len(search_team)} members.")
+        # Simulate searching the town for a fixed amount of time
+        search_time = 30  # Minutes
+        print(f"SearchTeam: Searching {location} for {search_time} minutes.")
+        return search_time
 
-        # Return to start
-        distance, travel_time = self.response_force.get_distance_and_travel_time(current, start)
-        total_distance += distance
-        total_travel_time += travel_time
-        path.append(start)
+    def graph_traversal(self, target_location, radius):
+        print(f"SearchTeam: Deploying to Target Location: {target_location}")
+        towns_to_search = []
+        for node_name, node in self.response_force.nodes.items():
+            if self.response_force.haversine(node['latitude'], node['longitude'], self.response_force.nodes[target_location]['latitude'], self.response_force.nodes[target_location]['longitude']) <= radius and node_name != target_location:
+                towns_to_search.append(node_name)
 
-        return path, total_distance, total_travel_time
+        # Perform a graph traversal to search each town
+        visited = set()
+        stack = [target_location]
+        while stack:
+            town = stack.pop()
+            if town not in visited:
+                visited.add(town)
+                print(f"SearchTeam: Searching {town}")
+                search_team = self.recruit_search_team(town)
+                search_time = self.search_town(town, search_team)
 
-    def search_for_pangobat(self, radius):
-        print(f"SearchTeam: Searching for Pangobat within {radius} of all towns")
-        start_location = 'Bendigo'
+                # Move to neighboring towns
+                for neighbor in self.response_force.graph[town]:
+                    if neighbor not in visited:
+                        stack.append(neighbor)
 
-        # Use the TSP approach to find the optimal path for searching
-        path, total_distance, total_travel_time = self.tsp(start_location)
+        print(f"SearchTeam: Search process complete.")
 
-        # Output the path and details
-        search_path_msg = f"SearchTeam: Searching towns using path: {' -> '.join(path)}\n"
-        for town in path[:-1]:  # Exclude the last town (Bendigo) since it's already printed in the path
-            if self.nodes[town]['pangobat_virus']:
-                search_path_msg += f"{town}: Pangobat Virus Found\n"
-            else:
-                search_path_msg += f"{town}: No Pangobat Virus found\n"
-
-        print(search_path_msg)
-        print(f"SearchTeam: Total distance: {total_distance:.2f} km, Total travel time: {total_travel_time:.2f} minutes")
-
-        print("SearchTeam: Search process complete")
+    def search_for_pangobat(self, target_location, radius):
+        self.graph_traversal(target_location, radius)
 
 class SanitationTeam:
-    def __init__(self, response_force, nodes, edges, graph):
+    def __init__(self, response_force):
         self.response_force = response_force
-        self.nodes = nodes
-        self.edges = edges
-        self.graph = graph
 
-    def nearest_neighbor_route(self, start):
-        unvisited = set(self.nodes.keys())
-        unvisited.remove(start)
-        current = start
-        path = [start]
-        total_distance = 0
-        total_travel_time = 0
+    def eulerian_circuit(self, graph):
+        # Find a starting node with an odd degree
+        for node, degree in graph.degree():
+            if degree % 2 == 1:
+                start = node
+                break
 
-        while unvisited:
-            next_node = min(unvisited, key=lambda x: self.response_force.get_distance_and_travel_time(current, x)[0])
-            distance, travel_time = self.response_force.get_distance_and_travel_time(current, next_node)
-            total_distance += distance
-            total_travel_time += travel_time
-            path.append(next_node)
-            unvisited.remove(next_node)
-            current = next_node
+        if 'start' not in locals():
+            raise ValueError("Graph has no Eulerian circuit")
 
-        # Add the last edge to return to the starting point
-        distance, travel_time = self.response_force.get_distance_and_travel_time(path[-1], start)
-        total_distance += distance
-        total_travel_time += travel_time
+        # Traverse the graph using a depth-first search
+        stack = [start]
+        circuit = [start]
+        while stack:
+            node = stack[-1]
+            if node not in graph[node]:
+                stack.pop()
+                circuit.append(node)
+            else:
+                stack.append(graph[node].pop())
 
-        return path, total_distance, total_travel_time
+        return circuit
 
-    def sanitize_roads(self):
-        print("\n"+"SanitationTeam: Sanitizing all roads on the map")
+    def sanitize_roads(self, target_location, radius):
+        print(f"SanitationTeam: Deploying to Target Location: {target_location}")
+        roads_to_sanitize = defaultdict(list)
+        for edge in self.response_force.edges:
+            if self.response_force.haversine(self.response_force.nodes[edge['place1']]['latitude'], self.response_force.nodes[edge['place1']]['longitude'], self.response_force.nodes[target_location]['latitude'], self.response_force.nodes[target_location]['longitude']) <= radius or \
+               self.response_force.haversine(self.response_force.nodes[edge['place2']]['latitude'], self.response_force.nodes[edge['place2']]['longitude'], self.response_force.nodes[target_location]['latitude'], self.response_force.nodes[target_location]['longitude']) <= radius:
+                roads_to_sanitize[edge['place1']].append(edge['place2'])
+                roads_to_sanitize[edge['place2']].append(edge['place1'])
 
-        # Choose a starting location (e.g., Bendigo)
-        start_location = 'Bendigo'
+        # Create a subgraph containing only the roads to sanitize
+        subgraph = self.response_force.graph.subgraph(roads_to_sanitize.keys())
 
-        # Use the Nearest Neighbor Algorithm to find the optimal path for sanitizing roads
-        path, total_distance, total_travel_time = self.nearest_neighbor_route(start_location)
+        # Find an Eulerian circuit in the subgraph
+        eulerian_circuit = self.eulerian_circuit(subgraph)
 
-        # Output the path and details
-        sanitized_path_msg = "Sanitation Route:\n"
-        for i in range(len(path) - 1):
-            place1 = path[i]
-            place2 = path[i + 1]
+        # Deploy the sanitation team along the Eulerian circuit
+        total_sanitize_time = 0
+        for i in range(len(eulerian_circuit) - 1):
+            place1 = eulerian_circuit[i]
+            place2 = eulerian_circuit[i + 1]
             distance, travel_time = self.response_force.get_distance_and_travel_time(place1, place2)
-            sanitized_path_msg += f"{place1} -> {place2} (distance: {distance:.2f} km, travel time: {travel_time:.2f} minutes)\n"
+            if distance == float('inf'):
+                print(f"SanitationTeam: No path found from {place1} to {place2}. Skipping sanitization.")
+                continue
+            print(f"SanitationTeam: Sanitizing road from {place1} to {place2} (distance: {distance:.2f} km, travel time: {travel_time:.2f} minutes)")
+            sanitize_time = travel_time * 0.5  # Assume it takes half the travel time to sanitize the road
+            total_sanitize_time += sanitize_time
 
-        print(sanitized_path_msg)
-        print(f"SanitationTeam: Total distance: {total_distance:.2f} km, Total travel time: {total_travel_time:.2f} minutes")
+        print(f"SanitationTeam: Sanitation process complete. Total sanitize time: {total_sanitize_time} minutes")
 
-        print("SanitationTeam: Sanitation process complete")
-
-
+    def solve_chinese_postman_problem(self, target_location, radius):
+        self.sanitize_roads(target_location, radius)
 
 class PangobatResponseManager:
     def __init__(self, nodes_file, edges_file):
@@ -269,7 +317,11 @@ class PangobatResponseManager:
 
     def respond_to_pangobat_sighting(self, target_location, radius):
         print(f"PangobatResponseManager: Responding to Pangobat sighting in {target_location}")
-        # Randomly tag some towns with the Pangobat virus tag within the radius
+
+        # Deploy the response force to the target location
+        self.response_force.target_travel.go(target_location, radius)
+
+        # Randomly tag some towns with the Pangobat virus within the radius
         infected_towns = []
         for node in self.response_force.nodes.values():
             if self.response_force.haversine(node['latitude'], node['longitude'], self.response_force.nodes[target_location]['latitude'], self.response_force.nodes[target_location]['longitude']) <= radius:
@@ -277,17 +329,17 @@ class PangobatResponseManager:
                     node['pangobat_virus'] = True
                     infected_towns.append(node['name'])
         if infected_towns:
-            print(f"Pangobat virus detected in the following towns: {', '.join(infected_towns)}"+"\n")
+            print(f"Pangobat virus detected in the following towns: {', '.join(infected_towns)}")
+
         # Deploy the medical team
         self.response_force.medical_team.vaccinate_population(target_location, radius)
 
-        
         # Deploy the search team
-        self.response_force.search_team.search_for_pangobat(radius)
+        self.response_force.search_team.search_for_pangobat(target_location, radius)
 
         # Deploy the sanitation team
-        self.response_force.sanitation_team.sanitize_roads()  # Removed the parameters
-        
+        self.response_force.sanitation_team.solve_chinese_postman_problem(target_location, radius)
+
         # Visualize the network
         self.visualize_network()
 
@@ -300,4 +352,4 @@ class PangobatResponseManager:
 
 # Example usage
 pangobat_response_manager = PangobatResponseManager('SAT 2024 Student Data/nodes.csv', 'SAT 2024 Student Data/edges.csv')
-pangobat_response_manager.respond_to_pangobat_sighting('Rye', 110)
+pangobat_response_manager.respond_to_pangobat_sighting('Rye', 50)

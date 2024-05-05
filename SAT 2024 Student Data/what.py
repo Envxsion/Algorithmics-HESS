@@ -4,12 +4,30 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import networkx as nx
 from networkx import spring_layout
+from math import sin, cos, asin, sqrt, pi
+
+# Haversine formula to calculate distance between two coordinates
+def haversine_distance(lat1, lon1, lat2, lon2):
+    R = 6371.0 # Earth radius in kilometers
+    lat1_rad = lat1 * pi / 180.0
+    lon1_rad = lon1 * pi / 180.0
+    lat2_rad = lat2 * pi / 180.0
+    lon2_rad = lon2 * pi / 180.0
+
+    dlat = lat2_rad - lat1_rad
+    dlon = lon2_rad - lon1_rad
+
+    a = sin(dlat / 2)**2 + cos(lat1_rad) * cos(lat2_rad) * sin(dlon / 2)**2
+    c = 2 * asin(sqrt(a))
+
+    distance = R * c
+    return distance
 
 class Graph:
     def __init__(self):
         self.nodes = {}
         self.edges = {}
-        self.degrees = {}  # Keep track of node degrees for the Chinese Postman Problem
+        self.degrees = {} # Keep track of node degrees for the Chinese Postman Problem
 
     def add_node(self, name, population, income, lat, lon, age):
         self.nodes[name] = (population, income, lat, lon, age)
@@ -26,7 +44,7 @@ class Graph:
         self.degrees[node2] += 1
 
 # Load nodes and edges data with custom column names
-nodes_df = pd.read_csv('SAT 2024 Student Data/nodes.csv', header=None, names=['name', 'population', 'income', 'lat', 'lon', 'age', 'node'])
+nodes_df = pd.read_csv('SAT 2024 Student Data/nodes.csv', header=None, names=['name', 'population', 'income', 'lat', 'lon', 'age'])
 edges_df = pd.read_csv('SAT 2024 Student Data/edges.csv', header=None, names=['from', 'to', 'distance', 'time'])
 
 # Create a graph
@@ -40,8 +58,7 @@ for _, row in nodes_df.iterrows():
 for _, row in edges_df.iterrows():
     G.add_edge(row['from'], row['to'], row['distance'])
 
-# ---------- Task 1: Shortest Path from Bendigo (Dijkstra's Algorithm) ----------
-
+# Task 1: Shortest Path from Bendigo (Dijkstra's Algorithm)
 def dijkstra(graph, source):
     distances = {node: float('inf') for node in graph.nodes}
     distances[source] = 0
@@ -65,24 +82,25 @@ def shortest_path_from_bendigo(target):
     bendigo_distances = dijkstra(G, 'Bendigo')
     path = [target]
     while path[-1] != 'Bendigo':
-        path.append(next(neighbor for neighbor, weight in G.edges[path[-1]].items() if bendigo_distances[path[-1]] == bendigo_distances[neighbor] + weight))
+        neighbors = G.edges[path[-1]]
+        next_node = min(neighbors, key=lambda node: bendigo_distances[node] + neighbors[node])
+        path.append(next_node)
+
     path.reverse()
     return path
-
 
 # Find the shortest path from Bendigo to the target location
 target_node = 'Melbourne'
 shortest_path = shortest_path_from_bendigo(target_node)
-print(f"AllTeams: Going to Target Location ({target_node}) from Bendigo")
-print("AllTeams: Going to Target Location using path:", ' -> '.join(shortest_path))
+print(f"All Teams: Going to Target Location ({target_node}) from Bendigo")
+print("All Teams: Going to Target Location using path:", ' -> '.join(shortest_path))
 
 # Calculate the distance and travel time to the target location
-bendigo_distance = sum(G.edges[shortest_path[i]][shortest_path[i+1]] for i in range(len(shortest_path)-1))
-bendigo_travel_time = sum(G.edges[shortest_path[i]][shortest_path[i+1]] for i in range(len(shortest_path)-1))
-print(f"AllTeams: Distance to Target Location: {bendigo_distance:.2f} km, Travel Time: {bendigo_travel_time:.2f} minutes")
+bendigo_distance = sum(G.edges[u][v] for u, v in zip(shortest_path[:-1], shortest_path[1:]))
+bendigo_travel_time = sum(G.edges[u][v] for u, v in zip(shortest_path[:-1], shortest_path[1:]))
+print(f"All Teams: Distance to Target Location: {bendigo_distance:.2f} km, Travel Time: {bendigo_travel_time:.2f} minutes")
 
-# ---------- Task 2: Medical Team Deployment (Simplified Traveling Salesman Problem) ----------
-
+# Task 2: Medical Team Deployment (Simplified Traveling Salesman Problem)
 def random_greedy_tour(graph, start_node):
     tour = [start_node]
     remaining_nodes = list(graph.nodes)
@@ -115,19 +133,25 @@ medical_team_distance = tour_distance(G, medical_team_tour)
 print("Medical Team Tour:", medical_team_tour)
 print("Medical Team Total Distance:", medical_team_distance)
 
-# Print verbose statements for medical team deployment
-print("MedicalTeam: At Target Location (Melbourne), recalculating towns within radius:")
-for i in range(len(medical_team_tour) - 1):
-    current_node = medical_team_tour[i]
-    next_node = medical_team_tour[i + 1]
-    distance = G.edges[current_node].get(next_node, 0)
-    print(f"MedicalTeam: Vaccinating {next_node} (distance: {distance:.2f} km, travel time: {distance:.2f} minutes)")
-    path = shortest_path_from_bendigo(next_node)
-    print("MedicalTeam: Going to", next_node, "using path:", ' -> '.join(path))
-print("MedicalTeam: Vaccinations Finished, returning to Bendigo")
+# Medical team deployment from the target location
+print(f"Medical Team: At Target Location ({target_node}), recalculating towns within a 100km radius:")
+radius = 100 # Specify the radius in kilometers
+target_location_coords = (G.nodes[target_node][2], G.nodes[target_node][3]) # Latitude and longitude of the target location
 
-# ---------- Task 3: Search Team Deployment (Graph Traversal) ----------
+surrounding_towns = []
+for town, coords in G.nodes.items():
+    town_coords = (coords[2], coords[3])
+    town_distance = haversine_distance(target_location_coords[0], target_location_coords[1], town_coords[0], town_coords[1])
+    if town_distance <= radius:
+        surrounding_towns.append(town)
 
+for town in surrounding_towns:
+    surrounding_path = shortest_path_from_bendigo(town)
+    print("Medical Team: Going to", town, "using path:", ' -> '.join(surrounding_path))
+
+print("Medical Team: Vaccinations Finished, returning to Bendigo")
+
+# Task 3: Search Team Deployment (Graph Traversal)
 def breadth_first_search(graph, source, target):
     visited = {node: False for node in graph.nodes}
     queue = [source]
@@ -148,7 +172,7 @@ def breadth_first_search(graph, source, target):
 
 # Find the shortest path from Bendigo to the target location
 search_team_start = 'Bendigo'
-search_team_target = 'Melbourne'
+search_team_target = target_node
 search_team_path = []
 
 current_node = search_team_start
@@ -162,8 +186,7 @@ while current_node != search_team_target:
 search_team_path.append(search_team_target)
 print("Search Team Path:", search_team_path)
 
-# ---------- Task 4: Sanitation Team Deployment (Simplified Chinese Postman Problem) ----------
-
+# Task 4: Sanitation Team Deployment (Simplified Chinese Postman Problem)
 def eulerian_cycle(graph):
     odd_degree_nodes = [node for node, degree in graph.degrees.items() if degree % 2 != 0]
     if len(odd_degree_nodes) == 0:

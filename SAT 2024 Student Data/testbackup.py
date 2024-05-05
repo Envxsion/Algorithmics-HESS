@@ -4,6 +4,9 @@ import networkx as nx
 import matplotlib.pyplot as plt
 from heapq import heappush, heappop
 import random
+from itertools import permutations
+from collections import defaultdict, deque
+
 
 class PangobatResponseForce:
     def __init__(self, nodes_file, edges_file):
@@ -133,12 +136,51 @@ class MedicalTeam:
         print(f"AllTeams: Distance to Target Location: {distance:.2f} km, Travel Time: {travel_time:.2f} minutes"+"\n")
 
         print(f"MedicalTeam: At Target Location ({target_location}), recalculating towns within radius:")
-        towns_to_vaccinate = []
+        towns_within_radius = [target_location]  # Include the target location
         for node_name, node in self.nodes.items():
             if self.response_force.haversine(node['latitude'], node['longitude'], self.nodes[target_location]['latitude'], self.nodes[target_location]['longitude']) <= radius and node_name != target_location:
-                towns_to_vaccinate.append(node_name)
+                towns_within_radius.append(node_name)
 
-        towns_to_vaccinate.sort(key=lambda x: self.response_force.get_distance_and_travel_time(target_location, x)[0])  # Sort by distance from target location
+        # Calculate distances between towns
+        distances = {}
+        for town1 in towns_within_radius:
+            distances[town1] = {}
+            for town2 in towns_within_radius:
+                if town1 != town2:
+                    distance, _ = self.response_force.get_distance_and_travel_time(town1, town2)
+                    distances[town1][town2] = distance
+
+        memo = {}  # Memoization dictionary
+
+        # Solve TSP using dynamic programming (Held-Karp algorithm)
+        def held_karp(mask, pos, dist):
+            if mask == (1 << len(towns_within_radius)) - 1:
+                return dist + distances[towns_within_radius[pos]][target_location]
+
+            if (mask, pos) in memo:
+                return memo[(mask, pos)]
+
+            best = float('inf')
+            for i in range(len(towns_within_radius)):
+                if (mask & (1 << i)) == 0:
+                    best = min(best, held_karp(mask | (1 << i), i, dist + distances[towns_within_radius[pos]][towns_within_radius[i]]))
+
+            memo[(mask, pos)] = best
+            return best
+
+        # Find the optimal tour using permutations
+        best_tour = []
+        best_distance = float('inf')
+        for perm in permutations(towns_within_radius):
+            distance = held_karp(1, 0, 0)
+            if distance < best_distance:
+                best_distance = distance
+                best_tour = perm
+
+        # Extract the towns to vaccinate in the order of the best tour
+        towns_to_vaccinate = [town for town in best_tour if town != target_location]
+
+        # Vaccinate the towns
         for town in towns_to_vaccinate:
             distance, travel_time = self.response_force.get_distance_and_travel_time(target_location, town)
             if distance == float('inf'):
@@ -156,57 +198,53 @@ class MedicalTeam:
         print(f"MedicalTeam: Returning to Bendigo using path: {' -> '.join(path)}")
         print(f"MedicalTeam: Distance to Bendigo: {distance:.2f} km, Travel Time: {travel_time:.2f} minutes"+"\n")
 
+
 class SearchTeam:
     def __init__(self, response_force, nodes, edges, graph):
         self.response_force = response_force
         self.nodes = nodes
         self.edges = edges
         self.graph = graph
+        self.search_path = []  # Initialize an empty list to store the search path
 
-    def tsp(self, start):
-        unvisited = set(self.nodes.keys())
-        unvisited.remove(start)
-        current = start
-        path = [start]
-        total_distance = 0
-        total_travel_time = 0
+    def bfs_search(self, start, radius):
+        visited = set()
+        queue = deque([(start, [start])])  # Include the current path along with the town in the queue
+        visited.add(start)
+        
+        while queue:
+            current_town, path = queue.popleft()
+            
+            if self.nodes[current_town]['pangobat_virus']:
+                print(f"{current_town}: Pangobat Virus Found")
+            
+            for neighbor in self.graph.neighbors(current_town):
+                if neighbor not in visited and self.response_force.haversine(
+                    self.nodes[current_town]['latitude'], self.nodes[current_town]['longitude'],
+                    self.nodes[neighbor]['latitude'], self.nodes[neighbor]['longitude']
+                ) <= radius:
+                    new_path = path + [neighbor]  # Extend the current path with the neighbor
+                    queue.append((neighbor, new_path))
+                    visited.add(neighbor)
 
-        while unvisited:
-            next_node = min(unvisited, key=lambda x: self.response_force.get_distance_and_travel_time(current, x)[0])
-            distance, travel_time = self.response_force.get_distance_and_travel_time(current, next_node)
-            total_distance += distance
-            total_travel_time += travel_time
-            path.append(next_node)
-            unvisited.remove(next_node)
-            current = next_node
+                    # Store the search path if Pangobat Virus is found
+                    if self.nodes[neighbor]['pangobat_virus']:
+                        self.search_path.append(new_path)
 
-        # Return to start
-        distance, travel_time = self.response_force.get_distance_and_travel_time(current, start)
-        total_distance += distance
-        total_travel_time += travel_time
-        path.append(start)
+    def search_for_pangobat(self, start, radius):
+        print(f"SearchTeam: Searching for Pangobat within {radius} km of all towns starting from {start}")
+        self.bfs_search(start, radius)
+        print("Search process complete")
 
-        return path, total_distance, total_travel_time
+        if self.search_path:
+            print("Search Paths:")
+            for idx, path in enumerate(self.search_path):
+                print(f"Search Team {idx + 1} Path:")
+                print(" -> ".join(path))
+        else:
+            print("No Pangobat Virus found in the searched towns")
 
-    def search_for_pangobat(self, radius):
-        print(f"SearchTeam: Searching for Pangobat within {radius} of all towns")
-        start_location = 'Bendigo'
 
-        # Use the TSP approach to find the optimal path for searching
-        path, total_distance, total_travel_time = self.tsp(start_location)
-
-        # Output the path and details
-        search_path_msg = f"SearchTeam: Searching towns using path: {' -> '.join(path)}\n"
-        for town in path[:-1]:  # Exclude the last town (Bendigo) since it's already printed in the path
-            if self.nodes[town]['pangobat_virus']:
-                search_path_msg += f"{town}: Pangobat Virus Found\n"
-            else:
-                search_path_msg += f"{town}: No Pangobat Virus found\n"
-
-        print(search_path_msg)
-        print(f"SearchTeam: Total distance: {total_distance:.2f} km, Total travel time: {total_travel_time:.2f} minutes")
-
-        print("SearchTeam: Search process complete")
 
 class SanitationTeam:
     def __init__(self, response_force, nodes, edges, graph):
@@ -215,51 +253,130 @@ class SanitationTeam:
         self.edges = edges
         self.graph = graph
 
-    def nearest_neighbor_route(self, start):
-        unvisited = set(self.nodes.keys())
-        unvisited.remove(start)
-        current = start
-        path = [start]
-        total_distance = 0
-        total_travel_time = 0
+    def chinese_postman(self):
+        # Find odd-degree nodes (roads)
+        odd_nodes = [node for node, degree in self.graph.degree() if degree % 2 != 0]
 
-        while unvisited:
-            next_node = min(unvisited, key=lambda x: self.response_force.get_distance_and_travel_time(current, x)[0])
-            distance, travel_time = self.response_force.get_distance_and_travel_time(current, next_node)
-            total_distance += distance
-            total_travel_time += travel_time
-            path.append(next_node)
-            unvisited.remove(next_node)
-            current = next_node
+        print("Odd-degree nodes:", odd_nodes)
+        print("Degrees of all nodes:", dict(self.graph.degree()))
 
-        # Add the last edge to return to the starting point
-        distance, travel_time = self.response_force.get_distance_and_travel_time(path[-1], start)
-        total_distance += distance
-        total_travel_time += travel_time
+        # Create a subgraph containing only the odd-degree nodes
+        odd_subgraph = self.graph.subgraph(odd_nodes)
 
-        return path, total_distance, total_travel_time
+        print("Odd-degree subgraph nodes:", odd_subgraph.nodes())
+
+        # Find minimum-weight matching for the odd-degree nodes
+        min_weight_matching = nx.algorithms.matching.max_weight_matching(odd_subgraph)
+
+        print("Minimum weight matching:", min_weight_matching)
+
+        # Create a new graph to store the augmented graph
+        augmented_graph = self.graph.copy()
+
+        # Add the matching edges to the augmented graph
+        for node1, node2 in min_weight_matching:
+            shortest_path = nx.shortest_path(augmented_graph, node1, node2, weight='weight')
+            print(f"Shortest path between {node1} and {node2}: {shortest_path}")
+            for i in range(len(shortest_path) - 1):
+                augmented_graph.add_edge(shortest_path[i], shortest_path[i + 1], weight=augmented_graph[shortest_path[i]][shortest_path[i + 1]]['weight'])
+
+        print("Augmented graph nodes:", augmented_graph.nodes())
+        print("Augmented graph edges:", augmented_graph.edges())
+
+        # Find Eulerian circuit in the augmented graph
+        try:
+            eulerian_circuit = list(nx.eulerian_circuit(augmented_graph))
+
+            print("Eulerian circuit:", eulerian_circuit)
+
+            # Extract the unique roads visited in the circuit
+            unique_roads = set()
+            for edge in eulerian_circuit:
+                unique_roads.add((edge[0], edge[1]))
+
+            print("Unique roads visited:", unique_roads)
+
+            # Calculate total distance traveled
+            total_distance = sum(augmented_graph[edge[0]][edge[1]]['weight'] for edge in unique_roads)
+
+            return eulerian_circuit, total_distance
+
+        except nx.NetworkXError as e:
+            print(f"Augmented graph is not Eulerian. Adding extra edges. Error: {e}")
+
+            # Add extra edges to make the graph Eulerian
+            for node in odd_nodes:
+                closest_node = min(list(self.graph.nodes() - {node}), key=lambda x: nx.shortest_path_length(self.graph, node, x, weight='weight'))
+                if closest_node in self.graph:
+                    print(f"Adding edge between {node} and {closest_node}")
+                    augmented_graph.add_edge(node, closest_node, weight=self.graph[node][closest_node]['weight'])
+                else:
+                    print(f"Closest node {closest_node} for node {node} does not exist in the original graph.")
+
+            # Print odd-degree nodes after adding extra edges
+            odd_nodes_after = [node for node, degree in augmented_graph.degree() if degree % 2 != 0]
+            print("Odd-degree nodes after adding extra edges:", odd_nodes_after)
+
+            # Print degrees of all nodes after adding extra edges
+            print("Degrees of all nodes after adding extra edges:", dict(augmented_graph.degree()))
+
+            # Visualize the augmented graph
+            plt.figure(figsize=(20, 16))
+            pos = nx.spring_layout(augmented_graph)  # Choose a layout algorithm
+            nx.draw(augmented_graph, pos, with_labels=True, node_size=200, node_color='lightblue', font_size=10)
+            nx.draw_networkx_edge_labels(augmented_graph, pos, edge_labels={(u, v): d['weight'] for u, v, d in augmented_graph.edges(data=True)})
+            plt.title('Augmented Graph with Extra Edges')
+            plt.show()
+
+            # Find Eulerian circuit in the augmented graph after adding extra edges
+            try:
+                eulerian_circuit = list(nx.eulerian_circuit(augmented_graph))
+
+                print("Eulerian circuit after adding extra edges:", eulerian_circuit)
+
+                # Extract the unique roads visited in the circuit
+                unique_roads = set()
+                for edge in eulerian_circuit:
+                    unique_roads.add((edge[0], edge[1]))
+
+                print("Unique roads visited after adding extra edges:", unique_roads)
+
+                # Calculate total distance traveled
+                total_distance = sum(augmented_graph[edge[0]][edge[1]]['weight'] for edge in unique_roads)
+
+                return eulerian_circuit, total_distance
+
+            except nx.NetworkXError as e:
+                print(f"Error: {e}")
+                return None, None
+
 
     def sanitize_roads(self):
-        print("\n"+"SanitationTeam: Sanitizing all roads on the map")
+        print("SanitationTeam: Sanitizing all roads on the map")
 
-        # Choose a starting location (e.g., Bendigo)
-        start_location = 'Bendigo'
+        # Find the optimal path using the Chinese Postman Problem
+        eulerian_circuit, total_distance = self.chinese_postman()
 
-        # Use the Nearest Neighbor Algorithm to find the optimal path for sanitizing roads
-        path, total_distance, total_travel_time = self.nearest_neighbor_route(start_location)
+        if eulerian_circuit is None:
+            print("Failed to find a valid sanitation route.")
+            return
 
         # Output the path and details
         sanitized_path_msg = "Sanitation Route:\n"
-        for i in range(len(path) - 1):
-            place1 = path[i]
-            place2 = path[i + 1]
-            distance, travel_time = self.response_force.get_distance_and_travel_time(place1, place2)
-            sanitized_path_msg += f"{place1} -> {place2} (distance: {distance:.2f} km, travel time: {travel_time:.2f} minutes)\n"
+        for i in range(len(eulerian_circuit) - 1):
+            place1 = eulerian_circuit[i][0]
+            place2 = eulerian_circuit[i][1]
+            distance = self.graph[place1][place2]['distance']
+            sanitized_path_msg += f"{place1} -> {place2} (distance: {distance:.2f} km)\n"
 
         print(sanitized_path_msg)
-        print(f"SanitationTeam: Total distance: {total_distance:.2f} km, Total travel time: {total_travel_time:.2f} minutes")
+        print(f"SanitationTeam: Total distance traveled: {total_distance:.2f} km")
 
-        print("SanitationTeam: Sanitation process complete")
+        print("Sanitation process complete")
+
+
+
+
 
 
 
@@ -283,10 +400,10 @@ class PangobatResponseManager:
 
         
         # Deploy the search team
-        self.response_force.search_team.search_for_pangobat(radius)
+        #self.response_force.search_team.search_for_pangobat(target_location, radius)
 
         # Deploy the sanitation team
-        self.response_force.sanitation_team.sanitize_roads()  # Removed the parameters
+        #self.response_force.sanitation_team.sanitize_roads()  # Removed the parameters
         
         # Visualize the network
         self.visualize_network()
@@ -300,4 +417,4 @@ class PangobatResponseManager:
 
 # Example usage
 pangobat_response_manager = PangobatResponseManager('SAT 2024 Student Data/nodes.csv', 'SAT 2024 Student Data/edges.csv')
-pangobat_response_manager.respond_to_pangobat_sighting('Rye', 110)
+pangobat_response_manager.respond_to_pangobat_sighting('Rye', 80)
