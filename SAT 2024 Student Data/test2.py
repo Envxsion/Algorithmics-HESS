@@ -50,9 +50,9 @@ class PangobatResponseManager:
         return c * r
 
     def identify_infected_towns(self):
-        # Automatically tag towns with the Pagobat virus based on random probability
-        random.seed(42)  # For reproducibility
-        infection_probability = 0.2  # Adjust as needed
+        ranint=random.randint(0,50)
+        random.seed(ranint)
+        infection_probability = 0.3 
 
         for index, row in self.nodes.iterrows():
             if random.random() < infection_probability:
@@ -62,9 +62,15 @@ class PangobatResponseManager:
         print("Infected Towns:", self.infected_towns)
 
     def visualize_graph(self):
-        # Visualize the graph using NetworkX
-        pos = nx.get_node_attributes(self.G, 'pos')
-        nx.draw(self.G, pos, with_labels=True)
+        plt.figure(figsize=(12, 8))  
+        pos = {town: (lon, lat) for town, lon, lat in zip(self.nodes['town'], self.nodes['lon'], self.nodes['lat'])}
+        nx.draw_networkx_nodes(self.G, pos, node_color='skyblue', node_size=300, alpha=0.8)
+        nx.draw_networkx_edges(self.G, pos, edge_color='gray', width=1.0, alpha=0.5)
+        labels = {town: town for town in self.G.nodes}
+        nx.draw_networkx_labels(self.G, pos, labels, font_size=10, font_color='black')
+        plt.title('Please Work')
+        plt.axis('off')  
+        plt.tight_layout() 
         plt.show()
 
     def dijkstra_all_teams(self, target):
@@ -264,92 +270,65 @@ class PangobatResponseManager:
                         queue.append((neighbor, current_time + data['time'], path + [neighbor], total_time + current_time + data['time'], total_distance))
 
         return search_teams
-    def held_karp_tsp(self, infected_towns):
-        # Implement the Held-Karp algorithm to find the optimal route for the medical team
-        # Reference: https://en.wikipedia.org/wiki/Held%E2%80%93Karp_algorithm
-
+    def held_karp_tsp(self, radius):
         def compute_distance_matrix(towns):
             distances = defaultdict(dict)
-            for i, town1 in enumerate(towns):
-                for j, town2 in enumerate(towns):
-                    if i != j:
-                        distance = self.dijkstra_distance(town1, town2)
-                        distances[town1][town2] = distance
-                        distances[town2][town1] = distance
+            for town in towns:
+                distances[town] = {}
+                for other_town in towns:
+                    if town != other_town:
+                        distance = self.dijkstra_distance(town, other_town)
+                        distances[town][other_town] = distance
             return distances
 
-        def solve_subproblem(towns, mask):
-            subproblem = str(tuple(towns)) + str(mask)
+        def solve_subproblem(towns, mask, start_town):
+            subproblem = str(tuple(towns)) + str(mask) + start_town
             if subproblem in self.memo:
                 return self.memo[subproblem]
 
             if mask == (1 << len(towns)) - 1:
-                return 0, []
+                return distances[start_town][towns[0]], [towns[0], start_town]
 
             min_cost = float('inf')
             min_path = []
+
             for i, town in enumerate(towns):
-                if mask & (1 << i) == 0:
-                    remaining_towns = [t for j, t in enumerate(towns) if mask & (1 << j) != 0]
-                    subproblem_distance, subproblem_path = solve_subproblem(remaining_towns, mask | (1 << i))
-                    distance = self.dijkstra_distance(town, remaining_towns[0]) + subproblem_distance
-                    path = [town] + subproblem_path
+                if i != 0 and mask & (1 << i) == 0:
+                    remaining_towns = [t for j, t in enumerate(towns) if j != i]
+
+                    subproblem_cost, subproblem_path = solve_subproblem(remaining_towns, mask | (1 << i), start_town)
+                    distance = distances[start_town][town] + subproblem_cost
+
                     if distance < min_cost:
                         min_cost = distance
-                        min_path = path
+                        min_path = [town] + subproblem_path
 
             self.memo[subproblem] = min_cost, min_path
             return min_cost, min_path
 
         # Main Held-Karp algorithm
-        towns = infected_towns.copy()
-        distances = compute_distance_matrix(towns)
         start_town = self.target_site
-        n = len(towns)
-        mask = (1 << n) - 1
+        all_towns = self.nodes['town'].tolist()
 
-        # Solve the main problem
-        _, path = solve_subproblem(towns, mask)
-        path = [start_town] + path
+        # Filter infected towns within the specified radius
+        infected_towns_within_radius = [town for town in all_towns if self.dijkstra_distance(start_town, town) <= radius]
 
-        # Calculate total distance and time
-        total_distance = sum([distances[path[i]][path[i+1]] for i in range(len(path)-1)])
+
+        # Ensure the start town is included in the infected towns list
+        if start_town not in infected_towns_within_radius:
+            infected_towns_within_radius.append(start_town)
+
+        distances = compute_distance_matrix(infected_towns_within_radius)
+        mask = 1
+
+        min_cost, path = solve_subproblem(infected_towns_within_radius, mask, start_town)
         total_time = sum([self.dijkstra_time(path[i], path[i+1]) for i in range(len(path)-1)])
 
-        return {'path': path, 'distance': total_distance, 'time': total_time}
-    def fleury_algorithm(self,G):
-        # Implement the Fleury algorithm to solve the Chinese Postman Problem
-        # Reference: https://en.wikipedia.org/wiki/Fleury_algorithm
+        return {'path': path, 'distance': min_cost, 'time': total_time}
 
-        # Find an Eulerian trail (not necessarily a cycle)
-        trail = []
-        odd_degree_nodes = [node for node, degree in G.degree() if degree % 2 == 1]
-        if not odd_degree_nodes:
-            return trail
 
-        start_node = odd_degree_nodes[0]
-        current_node = start_node
-        while True:
-            neighbors = list(G.neighbors(current_node))
-            if not neighbors:
-                return trail
 
-            next_node = neighbors[0]
-            if G.degree(next_node) % 2 == 1 or current_node == next_node:
-                next_node = neighbors[1]
 
-            trail.append((current_node, next_node))
-            current_node = next_node
-
-            if not G.degree(current_node) % 2:
-                odd_degree_nodes.remove(current_node)
-
-            if not odd_degree_nodes:
-                break
-
-        # Convert the Eulerian trail into an Eulerian cycle
-        cycle = trail + trail[::-1]
-        return cycle
     def task_1(self):
         # Task 1: Find the shortest path for All Teams from Bendigo to the target site
         '''
@@ -425,23 +404,17 @@ class PangobatResponseManager:
          # Task 2: Find the optimal route for the medical team using TSP within a given radius
         start_town = self.target_site
         infected_towns = self.infected_towns
-
-        # Filter infected towns within the given radius
         infected_towns_within_radius = [town for town in infected_towns if self.dijkstra_distance(start_town, town) <= radius]
-
-        # Check if there are infected towns within the radius
         if not infected_towns_within_radius:
             print("No infected towns found within the specified radius.")
             return
 
-        # Choose between Nearest Neighbor and Held-Karp algorithm
-        use_held_karp = False  # Set to True to use Held-Karp, False for Nearest Neighbor
+        #Choose between Nearest Neighbor and Held-Karp algorithm
+        use_held_karp = False # Set to True to use Held-Karp, False for Nearest Neighbor
 
         if use_held_karp:
-            # Implement the Held-Karp algorithm
             medical_route = self.held_karp_tsp(infected_towns_within_radius)
         else:
-            # Implement the Nearest Neighbor TSP algorithm
             medical_route = self.nearest_neighbor_tsp(start_town, infected_towns_within_radius)
 
         self.medical_route = medical_route
@@ -454,7 +427,6 @@ class PangobatResponseManager:
         # Task 3: Deploy search teams to visit all towns within a given radius and report infection status
         start_town = self.target_site
 
-        # Implement BFS to visit all towns within the radius and report infection status
         print("Task 3 - Search Teams:")
         search_teams = self.breadth_first_search(start_town, radius)
         self.search_teams = search_teams
@@ -467,23 +439,6 @@ class PangobatResponseManager:
                 else:
                     print(f"{town} (Not Infected)")
             print()
-    def task_4(self,G):
-        # Task 4: Find the optimal route for the sanitation team using the Chinese Postman Problem
-        start_town = self.target_site
-
-        # Implement the Fleury algorithm to find the Eulerian cycle
-        sanitation_route = self.fleury_algorithm(self.G)
-
-        # Calculate total time and distance
-        total_time = sum([self.dijkstra_time(edge[0], edge[1]) for edge in sanitation_route])
-        total_distance = sum([self.dijkstra_distance(edge[0], edge[1]) for edge in sanitation_route])
-
-        self.sanitation_route = {'path': sanitation_route, 'time': total_time, 'distance': total_distance}
-        print("Task 4 - Sanitation Team:")
-        print("Path:", sanitation_route)
-        print("Total Time:", total_time)
-        print("Total Distance:", total_distance)
-    # TODO: Implement other tasks (TSP for medical team, BFS for search team, Chinese Postman for sanitation team)
 
 #Params
 edges_file = 'SAT 2024 Student Data/edges.csv'
@@ -498,10 +453,9 @@ response_manager.visualize_graph()
 target_site = 'Melbourne'
 response_manager.target_site = target_site
 
-radius = 80
+radius = 50
 
 #Exec tasks below
 response_manager.task_1()
 response_manager.task_2(radius)
 response_manager.task_3(radius)
-response_manager.task_4(response_manager.G)
