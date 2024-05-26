@@ -23,7 +23,7 @@ class PangobatResponseManager:
         self.medical_route = []
         self.search_teams = []
         self.sanitation_route = []
-        self.memo={} #memo dict
+        self.memo = {}  # memo dict
 
     def load_data(self):
         # Load edges and nodes data from CSV files
@@ -44,15 +44,15 @@ class PangobatResponseManager:
         lon1, lat1, lon2, lat2 = map(math.radians, [lon1, lat1, lon2, lat2])
         dlon = lon2 - lon1
         dlat = lat2 - lat1
-        a = math.sin(dlat/2)**2 + math.cos(lat1) * math.cos(lat2) * math.sin(dlon/2)**2
-        c = 2 * math.asin(a**0.5)
+        a = math.sin(dlat / 2) ** 2 + math.cos(lat1) * math.cos(lat2) * math.sin(dlon / 2) ** 2
+        c = 2 * math.asin(math.sqrt(a))
         r = 6371  # Earth's radius in kilometers
         return c * r
 
     def identify_infected_towns(self):
-        ranint=random.randint(0,50)
+        ranint = random.randint(0, 50)
         random.seed(ranint)
-        infection_probability = 0.3 
+        infection_probability = 0.3
 
         for index, row in self.nodes.iterrows():
             if random.random() < infection_probability:
@@ -62,38 +62,30 @@ class PangobatResponseManager:
         print("Infected Towns:", self.infected_towns)
 
     def visualize_graph(self):
-        plt.figure(figsize=(12, 8))  
+        plt.figure(figsize=(12, 8))
         pos = {town: (lon, lat) for town, lon, lat in zip(self.nodes['town'], self.nodes['lon'], self.nodes['lat'])}
         nx.draw_networkx_nodes(self.G, pos, node_color='skyblue', node_size=300, alpha=0.8)
         nx.draw_networkx_edges(self.G, pos, edge_color='gray', width=1.0, alpha=0.5)
         labels = {town: town for town in self.G.nodes}
         nx.draw_networkx_labels(self.G, pos, labels, font_size=10, font_color='black')
-        plt.title('Please Work')
-        plt.axis('off')  
-        plt.tight_layout() 
+        plt.title('Pangobat Response Network')
+        plt.axis('off')
+        plt.tight_layout()
         plt.show()
 
     def dijkstra_all_teams(self, target):
-        # Implement Dijkstra's algorithm to find the shortest path from Bendigo to the target site
-        # Prioritize time over distance
         self.target_site = target
         start_node = 'Bendigo'
-
-        # Initialize distances and parents dictionaries
         distances = {node: float('inf') for node in self.G.nodes}
         distances[start_node] = 0
         parents = {node: None for node in self.G.nodes}
-
-        # Use a priority queue to store nodes and their distances
         heap = []
         heapq.heappush(heap, (0, start_node))
 
         while heap:
             current_distance, current_node = heapq.heappop(heap)
 
-            # Check if we've reached the target site
             if current_node == target:
-                # Reconstruct the path from parents dictionary
                 path = [current_node]
                 parent = parents[current_node]
                 while parent is not None:
@@ -101,14 +93,12 @@ class PangobatResponseManager:
                     parent = parents[parent]
                 path = path[::-1]
 
-                # Calculate total distance and time
-                total_distance = sum([self.G[path[i]][path[i+1]]['distance'] for i in range(len(path)-1)])
-                total_time = sum([self.G[path[i]][path[i+1]]['time'] for i in range(len(path)-1)])
+                total_distance = sum([self.G[path[i]][path[i + 1]]['distance'] for i in range(len(path) - 1)])
+                total_time = sum([self.G[path[i]][path[i + 1]]['time'] for i in range(len(path) - 1)])
 
                 self.all_teams_route = {'path': path, 'distance': total_distance, 'time': total_time}
                 return
 
-            # Explore neighbors of the current node
             for neighbor, data in self.G[current_node].items():
                 distance = data['distance']
                 time = data['time']
@@ -119,39 +109,29 @@ class PangobatResponseManager:
                     distances[neighbor] = new_distance
                     parents[neighbor] = current_node
                     heapq.heappush(heap, (new_time, neighbor))
+
     def dijkstra_time(self, town1, town2):
-        # Implement Dijkstra's algorithm to find the shortest time between town1 and town2
-        # Prioritize time over distance
         start_node = town1
         end_node = town2
-
-        # Initialize distances and parents dictionaries
         distances = {node: float('inf') for node in self.G.nodes}
         distances[start_node] = 0
         parents = {node: None for node in self.G.nodes}
-
-        # Use a priority queue to store nodes and their distances
         heap = []
         heapq.heappush(heap, (0, start_node))
 
         while heap:
             current_distance, current_node = heapq.heappop(heap)
 
-            # Check if we've reached the end node
             if current_node == end_node:
-                # Reconstruct the path from parents dictionary
                 path = [current_node]
                 parent = parents[current_node]
                 while parent is not None:
                     path.append(parent)
                     parent = parents[parent]
                 path = path[::-1]
-
-                # Calculate total time
-                total_time = sum([self.G[path[i]][path[i+1]]['time'] for i in range(len(path)-1)])
+                total_time = sum([self.G[path[i]][path[i + 1]]['time'] for i in range(len(path) - 1)])
                 return total_time
 
-            # Explore neighbors of the current node
             for neighbor, data in self.G[current_node].items():
                 distance = data['distance']
                 time = data['time']
@@ -162,39 +142,29 @@ class PangobatResponseManager:
                     distances[neighbor] = new_distance
                     parents[neighbor] = current_node
                     heapq.heappush(heap, (new_time, neighbor))
+
     def dijkstra_distance(self, town1, town2):
-        # Implement Dijkstra's algorithm to find the shortest distance between town1 and town2
-        # Prioritize distance over time
         start_node = town1
         end_node = town2
-
-        # Initialize distances and parents dictionaries
         distances = {node: float('inf') for node in self.G.nodes}
         distances[start_node] = 0
         parents = {node: None for node in self.G.nodes}
-
-        # Use a priority queue to store nodes and their distances
         heap = []
         heapq.heappush(heap, (0, start_node))
 
         while heap:
             current_distance, current_node = heapq.heappop(heap)
 
-            # Check if we've reached the end node
             if current_node == end_node:
-                # Reconstruct the path from parents dictionary
                 path = [current_node]
                 parent = parents[current_node]
                 while parent is not None:
                     path.append(parent)
                     parent = parents[parent]
                 path = path[::-1]
-
-                # Calculate total distance
-                total_distance = sum([self.G[path[i]][path[i+1]]['distance'] for i in range(len(path)-1)])
+                total_distance = sum([self.G[path[i]][path[i + 1]]['distance'] for i in range(len(path) - 1)])
                 return total_distance
 
-            # Explore neighbors of the current node
             for neighbor, data in self.G[current_node].items():
                 distance = data['distance']
                 time = data['time']
@@ -205,45 +175,35 @@ class PangobatResponseManager:
                     distances[neighbor] = new_distance
                     parents[neighbor] = current_node
                     heapq.heappush(heap, (new_distance, neighbor))
+
     def nearest_neighbor_tsp(self, start, infected_towns):
-        # Implement the Nearest Neighbor TSP algorithm to find a route for the medical team
         route = [start]
         remaining_towns = infected_towns.copy()
         while remaining_towns:
             current_town = route[-1]
-
-            # Find the shortest path time to each remaining town using Dijkstra's algorithm
             times_to_towns = {town: self.dijkstra_time(current_town, town) for town in remaining_towns}
-
-            # Find the town with the minimum time
             next_town = min(remaining_towns, key=lambda town: times_to_towns[town])
-
-            # Add intermediary towns between current_town and next_town
             intermediary_towns = self.find_intermediary_towns(current_town, next_town)
             route.extend(intermediary_towns)
             route.append(next_town)
             remaining_towns.remove(next_town)
 
-        # Add the start town again to complete the route
         route.append(start)
-
-        # Calculate total distance and time
-        total_distance = sum([self.dijkstra_distance(route[i], route[i+1]) for i in range(len(route)-1)])
-        total_time = sum([self.dijkstra_time(route[i], route[i+1]) for i in range(len(route)-1)])
+        total_distance = sum([self.dijkstra_distance(route[i], route[i + 1]) for i in range(len(route) - 1)])
+        total_time = sum([self.dijkstra_time(route[i], route[i + 1]) for i in range(len(route) - 1)])
 
         return {'path': route, 'distance': total_distance, 'time': total_time}
 
     def find_intermediary_towns(self, town1, town2):
-        # Find intermediary towns between town1 and town2
         intermediary_towns = []
         path = nx.shortest_path(self.G, town1, town2)
-        for i in range(1, len(path)-1):
+        for i in range(1, len(path) - 1):
             intermediary_towns.append(path[i])
         return intermediary_towns
+
     def breadth_first_search(self, start, radius):
-        # Implement BFS to visit all towns within a given radius and report if they are infected
         visited = set()
-        queue = [(start, 0, [start], 0, 0)]  # town, time, path, total_time, total_distance
+        queue = [(start, 0, [start], 0, 0)]
         search_teams = []
 
         while queue:
@@ -251,81 +211,50 @@ class PangobatResponseManager:
 
             if current_town not in visited:
                 visited.add(current_town)
-
-                # Calculate total time and distance
                 total_time += current_time
-                if len(path) > 1:  # Check if path has at least two elements
+                if len(path) > 1:
                     total_distance += self.dijkstra_distance(path[-2], path[-1])
 
-                if current_town in self.infected_towns:
-                    print(f"Town: {current_town} (Infected) (Time: {total_time}, Distance: {total_distance})")
-                else:
-                    print(f"Town: {current_town} (Not Infected) (Time: {total_time}, Distance: {total_distance})")
-
                 for neighbor, data in self.G[current_town].items():
-                    #print(neighbor)
-                    #print(data)
-                    #print(data["distance"]<=radius)
-                    if data['distance'] <= radius and neighbor not in visited:
-                        queue.append((neighbor, current_time + data['time'], path + [neighbor], total_time + current_time + data['time'], total_distance))
+                    distance = data['distance']
+                    time = data['time']
+                    if total_distance + distance <= radius:
+                        new_path = path + [neighbor]
+                        queue.append((neighbor, time, new_path, total_time, total_distance))
+
+                search_teams.append((len(search_teams) + 1, total_time, path, total_time, total_distance))
 
         return search_teams
-    def held_karp_tsp(self, radius):
-        def compute_distance_matrix(towns):
-            distances = defaultdict(dict)
-            for town in towns:
-                distances[town] = {}
-                for other_town in towns:
-                    if town != other_town:
-                        distance = self.dijkstra_distance(town, other_town)
-                        distances[town][other_town] = distance
-            return distances
 
-        def solve_subproblem(towns, mask, start_town):
-            subproblem = str(tuple(towns)) + str(mask) + start_town
-            if subproblem in self.memo:
-                return self.memo[subproblem]
 
-            if mask == (1 << len(towns)) - 1:
-                return distances[start_town][towns[0]], [towns[0], start_town]
+
+    def held_karp_tsp(self, start, infected_towns):
+        all_towns = [start] + infected_towns
+        n = len(all_towns)
+        dist = {town: {} for town in all_towns}
+
+        for i in range(n):
+            for j in range(n):
+                if i != j:
+                    dist[all_towns[i]][all_towns[j]] = self.dijkstra_distance(all_towns[i], all_towns[j])
+
+        def tsp_dp(subset, last):
+            if (subset, last) in self.memo:
+                return self.memo[(subset, last)]
+            if subset == (1 << n) - 1:
+                return dist[all_towns[last]][all_towns[0]]
 
             min_cost = float('inf')
-            min_path = []
+            for city in range(n):
+                if subset & (1 << city) == 0:
+                    new_cost = dist[all_towns[last]][all_towns[city]] + tsp_dp(subset | (1 << city), city)
+                    min_cost = min(min_cost, new_cost)
 
-            for i, town in enumerate(towns):
-                if i != 0 and mask & (1 << i) == 0:
-                    remaining_towns = [t for j, t in enumerate(towns) if j != i]
+            self.memo[(subset, last)] = min_cost
+            return min_cost
 
-                    subproblem_cost, subproblem_path = solve_subproblem(remaining_towns, mask | (1 << i), start_town)
-                    distance = distances[start_town][town] + subproblem_cost
-
-                    if distance < min_cost:
-                        min_cost = distance
-                        min_path = [town] + subproblem_path
-
-            self.memo[subproblem] = min_cost, min_path
-            return min_cost, min_path
-
-        # Main Held-Karp algorithm
-        start_town = self.target_site
-        all_towns = self.nodes['town'].tolist()
-
-        # Filter infected towns within the specified radius
-        infected_towns_within_radius = [town for town in all_towns if self.dijkstra_distance(start_town, town) <= radius]
-
-
-        # Ensure the start town is included in the infected towns list
-        if start_town not in infected_towns_within_radius:
-            infected_towns_within_radius.append(start_town)
-
-        distances = compute_distance_matrix(infected_towns_within_radius)
-        mask = 1
-
-        min_cost, path = solve_subproblem(infected_towns_within_radius, mask, start_town)
-        total_time = sum([self.dijkstra_time(path[i], path[i+1]) for i in range(len(path)-1)])
-
-        return {'path': path, 'distance': min_cost, 'time': total_time}
-
+        min_cost = tsp_dp(1, 0)
+        return min_cost
 
 
 
@@ -413,7 +342,7 @@ class PangobatResponseManager:
         use_held_karp = False # Set to True to use Held-Karp, False for Nearest Neighbor
 
         if use_held_karp:
-            medical_route = self.held_karp_tsp(infected_towns_within_radius)
+            medical_route = self.held_karp_tsp(start_town, infected_towns_within_radius)
         else:
             medical_route = self.nearest_neighbor_tsp(start_town, infected_towns_within_radius)
 
@@ -430,8 +359,8 @@ class PangobatResponseManager:
         print("Task 3 - Search Teams:")
         search_teams = self.breadth_first_search(start_town, radius)
         self.search_teams = search_teams
-        for team, time, path, total_time, total_distance in search_teams:
-            print(f"Team {len(search_teams)+1}: Path: {path} (Total Time: {total_time}, Total Distance: {total_distance})")
+        for team_number, time, path, total_time, total_distance in search_teams:
+            print(f"Team {team_number}: Path: {path} (Total Time: {total_time}, Total Distance: {total_distance})")
             print("Infection Status:")
             for town in path:
                 if town in self.infected_towns:
@@ -453,7 +382,7 @@ response_manager.visualize_graph()
 target_site = 'Melbourne'
 response_manager.target_site = target_site
 
-radius = 50
+radius = 150
 
 #Exec tasks below
 response_manager.task_1()
