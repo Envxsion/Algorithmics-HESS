@@ -11,8 +11,7 @@ from heapq import heappush, heappop
 import random
 from itertools import permutations
 from collections import defaultdict
-from scipy.spatial.distance import pdist
-from scipy.optimize import linear_sum_assignment
+
 class PangobatResponseManager:
     def __init__(self, edges_file, nodes_file):
         self.edges_file = edges_file
@@ -242,19 +241,28 @@ class PangobatResponseManager:
             if (subset, last) in self.memo:
                 return self.memo[(subset, last)]
             if subset == (1 << n) - 1:
-                return dist[all_towns[last]][all_towns[0]]
+                return (dist[all_towns[last]][all_towns[0]], [])
 
             min_cost = float('inf')
+            min_path = []
             for city in range(n):
                 if subset & (1 << city) == 0:
-                    new_cost = dist[all_towns[last]][all_towns[city]] + tsp_dp(subset | (1 << city), city)
-                    min_cost = min(min_cost, new_cost)
+                    cost, path = tsp_dp(subset | (1 << city), city)
+                    new_cost = dist[all_towns[last]][all_towns[city]] + cost
+                    if new_cost < min_cost:
+                        min_cost = new_cost
+                        min_path = path + [all_towns[city]]
 
-            self.memo[(subset, last)] = min_cost
-            return min_cost
+            min_path = [all_towns[last]] + min_path
+            self.memo[(subset, last)] = (min_cost, min_path)
+            return self.memo[(subset, last)]
 
-        min_cost = tsp_dp(1, 0)
-        return min_cost
+        min_cost, min_path = tsp_dp(1, 0)
+        min_path.append(start)
+        total_distance = min_cost
+        total_time = sum([self.dijkstra_time(min_path[i], min_path[i + 1]) for i in range(len(min_path) - 1)])
+
+        return {'path': min_path, 'distance': total_distance, 'time': total_time}
 
 
 
@@ -266,10 +274,10 @@ class PangobatResponseManager:
             distances[start_node] = 0
             parents[start_node] = None
 
-            Create a priority queue to store nodes and their distances
+            Create a priority queue to store nodes and their times
 
             while priority queue is not empty:
-                current_node = node with the smallest distance in the priority queue
+                current_node = node with the smallest time in the priority queue
 
                 if current_node is the target:
                     Reconstruct the path from parents dictionary
@@ -291,7 +299,7 @@ class PangobatResponseManager:
                     if new_distance < distances[neighbor]:
                         distances[neighbor] = new_distance
                         parents[neighbor] = current_node
-                        update priority queue with new_distance and neighbor
+                        update priority queue with new_time and neighbor
 
             return None
         '''
@@ -300,6 +308,7 @@ class PangobatResponseManager:
         print("Path:", response_manager.all_teams_route['path'])
         print("Total Distance:", response_manager.all_teams_route['distance'])
         print("Total Time:", response_manager.all_teams_route['time'])
+        print()
     def task_2(self, radius):
         #  Task 2: Find the optimal route for the medical team using TSP
         ''' 
@@ -329,6 +338,8 @@ class PangobatResponseManager:
                 for each town in path (excluding start and end):
                     add town to intermediaryTowns
                 return intermediaryTowns
+
+
         '''
          # Task 2: Find the optimal route for the medical team using TSP within a given radius
         start_town = self.target_site
@@ -351,9 +362,35 @@ class PangobatResponseManager:
         print("Path:", medical_route['path'])
         print("Total Distance:", medical_route['distance'])
         print("Total Time:", medical_route['time'])
+        print()
 
     def task_3(self, radius):
         # Task 3: Deploy search teams to visit all towns within a given radius and report infection status
+        
+        '''
+        function breadth_first_search(start, radius):
+            visited = set to keep track of visited towns
+            queue = initialize with (start, 0, [start], 0, 0) representing (town, time, path, total_time, total_distance)
+            search_teams = list to store search team information
+
+            while queue is not empty:
+                current_town, current_time, path, total_time, total_distance = dequeue from queue
+
+                if current_town is not visited:
+                    mark current_town as visited
+                    update total_time and total_distance
+
+                    for each neighbor of current_town:
+                        distance = distance from current_town to neighbor
+                        time = time from current_town to neighbor
+                        if total_distance + distance <= radius:
+                            new_path = path + [neighbor]
+                            enqueue (neighbor, time, new_path, total_time, total_distance) to the queue
+
+                    add search team information (team number, total_time, path, total_time, total_distance) to search_teams
+
+            return search_teams
+    '''
         start_town = self.target_site
 
         print("Task 3 - Search Teams:")
