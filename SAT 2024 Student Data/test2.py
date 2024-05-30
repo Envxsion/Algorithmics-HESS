@@ -225,47 +225,6 @@ class PangobatResponseManager:
 
         return search_teams
 
-
-
-    def held_karp_tsp(self, start, infected_towns):
-        all_towns = [start] + infected_towns
-        n = len(all_towns)
-        dist = {town: {} for town in all_towns}
-
-        for i in range(n):
-            for j in range(n):
-                if i != j:
-                    dist[all_towns[i]][all_towns[j]] = self.dijkstra_distance(all_towns[i], all_towns[j])
-
-        def tsp_dp(subset, last):
-            if (subset, last) in self.memo:
-                return self.memo[(subset, last)]
-            if subset == (1 << n) - 1:
-                return (dist[all_towns[last]][all_towns[0]], [])
-
-            min_cost = float('inf')
-            min_path = []
-            for city in range(n):
-                if subset & (1 << city) == 0:
-                    cost, path = tsp_dp(subset | (1 << city), city)
-                    new_cost = dist[all_towns[last]][all_towns[city]] + cost
-                    if new_cost < min_cost:
-                        min_cost = new_cost
-                        min_path = path + [all_towns[city]]
-
-            min_path = [all_towns[last]] + min_path
-            self.memo[(subset, last)] = (min_cost, min_path)
-            return self.memo[(subset, last)]
-
-        min_cost, min_path = tsp_dp(1, 0)
-        min_path.append(start)
-        total_distance = min_cost
-        total_time = sum([self.dijkstra_time(min_path[i], min_path[i + 1]) for i in range(len(min_path) - 1)])
-
-        return {'path': min_path, 'distance': total_distance, 'time': total_time}
-
-
-
     def task_1(self):
         # Task 1: Find the shortest path for All Teams from Bendigo to the target site
         '''
@@ -305,43 +264,13 @@ class PangobatResponseManager:
         '''
         self.dijkstra_all_teams(self.target_site)
         print("Task 1 - All Teams:")
-        print("Path:", response_manager.all_teams_route['path'])
-        print("Total Distance:", response_manager.all_teams_route['distance'])
-        print("Total Time:", response_manager.all_teams_route['time'])
+        print("Path:", self.all_teams_route['path'])
+        print("Total Distance:", self.all_teams_route['distance'])
+        print("Total Time:", self.all_teams_route['time'])
         print()
+
     def task_2(self, radius):
-        #  Task 2: Find the optimal route for the medical team using TSP
-        ''' 
-            function nearestNeighborTSP(start, infectedTowns):
-                route = [start]
-                remainingTowns = infectedTowns.copy()
-
-                while remainingTowns is not empty:
-                    currentTown = last town in route
-                    nextTown = town in remainingTowns with minimum time from currentTown
-
-                    intermediaryTowns = findIntermediaryTowns(currentTown, nextTown)
-                    add intermediaryTowns to route
-                    add nextTown to route
-                    remove nextTown from remainingTowns
-
-                add start town to route again
-
-                totalDistance = sum of distances between consecutive towns in route
-                totalTime = sum of times between consecutive towns in route
-
-                return route, totalDistance, totalTime
-
-            function findIntermediaryTowns(town1, town2):
-                intermediaryTowns = []
-                path = shortest path from town1 to town2
-                for each town in path (excluding start and end):
-                    add town to intermediaryTowns
-                return intermediaryTowns
-
-
-        '''
-         # Task 2: Find the optimal route for the medical team using TSP within a given radius
+        # Task 2: Find the optimal route for the medical team using TSP within a given radius
         start_town = self.target_site
         infected_towns = self.infected_towns
         infected_towns_within_radius = [town for town in infected_towns if self.dijkstra_distance(start_town, town) <= radius]
@@ -349,13 +278,13 @@ class PangobatResponseManager:
             print("No infected towns found within the specified radius.")
             return
 
-        #Choose between Nearest Neighbor and Held-Karp algorithm
-        use_held_karp = False # Set to True to use Held-Karp, False for Nearest Neighbor
+        use_nearest_neighbor = True  # Set to True to use Nearest Neighbor, a better algo for U4 if flag is false
 
-        if use_held_karp:
-            medical_route = self.held_karp_tsp(start_town, infected_towns_within_radius)
-        else:
+        if use_nearest_neighbor:
             medical_route = self.nearest_neighbor_tsp(start_town, infected_towns_within_radius)
+        else:
+            #more efficient code for U4 here
+            pass
 
         self.medical_route = medical_route
         print("Task 2 - Medical Team:")
@@ -366,7 +295,6 @@ class PangobatResponseManager:
 
     def task_3(self, radius):
         # Task 3: Deploy search teams to visit all towns within a given radius and report infection status
-        
         '''
         function breadth_first_search(start, radius):
             visited = set to keep track of visited towns
@@ -390,7 +318,7 @@ class PangobatResponseManager:
                     add search team information (team number, total_time, path, total_time, total_distance) to search_teams
 
             return search_teams
-    '''
+        '''
         start_town = self.target_site
 
         print("Task 3 - Search Teams:")
@@ -406,7 +334,7 @@ class PangobatResponseManager:
                     print(f"{town} (Not Infected)")
             print()
 
-#Params
+# Params
 edges_file = 'SAT 2024 Student Data/edges.csv'
 nodes_file = 'SAT 2024 Student Data/nodes.csv'
 
@@ -415,13 +343,12 @@ response_manager.load_data()
 response_manager.identify_infected_towns()
 response_manager.visualize_graph()
 
-
 target_site = 'Melbourne'
 response_manager.target_site = target_site
 
 radius = 150
 
-#Exec tasks below
+# Executing tasks
 response_manager.task_1()
 response_manager.task_2(radius)
 response_manager.task_3(radius)
