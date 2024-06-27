@@ -572,10 +572,10 @@ response_manager.load_data()
 response_manager.identify_infected_towns()
 response_manager.visualize_graph()
 
-target_site = 'Mildura'
+target_site = 'Rye'
 response_manager.target_site = target_site
 
-radius = 300
+radius = 150
 
 # Executing tasks
 response_manager.task_1()
