@@ -575,7 +575,7 @@ response_manager.visualize_graph()
 target_site = 'Rye'
 response_manager.target_site = target_site
 
-radius = 150
+radius = 50
 
 # Executing tasks
 response_manager.task_1()
