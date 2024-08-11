@@ -2,8 +2,7 @@ import networkx as nx
 import pandas as pd
 import math
 import heapq
-import os
-import csv
+import time as sec
 import math
 import matplotlib.pyplot as plt
 from heapq import heappush, heappop
@@ -48,8 +47,8 @@ class PangobatResponseManager:
         - None
         """
         # Load edges and nodes data from CSV files
-        self.edges = pd.read_csv(self.edges_file, header=None, names=['from', 'to', 'distance', 'time'])
-        self.nodes = pd.read_csv(self.nodes_file, header=None, names=['town', 'population', 'income', 'lat', 'lon', 'age'])
+        self.edges = pd.read_csv(self.edges_file, header=None, names=['from', 'to', 'distance', 'time'],skiprows=1)
+        self.nodes = pd.read_csv(self.nodes_file, header=None, names=['town', 'population', 'income', 'lat', 'lon', 'age'],skiprows=1)
 
         # Create an undirected graph from the edges data
         self.G = nx.from_pandas_edgelist(self.edges, 'from', 'to', edge_attr=True)
@@ -127,7 +126,7 @@ class PangobatResponseManager:
         plt.axis('off')
         plt.tight_layout()
         plt.show()
-
+    
     def visualize_task_1(self):
         """
         Visualizes the task 1 route on a network graph.
@@ -367,6 +366,8 @@ class PangobatResponseManager:
                 search_teams.append((len(search_teams) + 1, total_time, path, total_time, total_distance))
 
         return search_teams
+    def nano(self, time_value):
+        return round(time_value * 1e9) / 1e9
 
     def task_1(self):
         """
@@ -422,11 +423,14 @@ class PangobatResponseManager:
             return None
         algorithm_end 
         """
+        start_time = sec.time()
         self.all_teams_route = self.dijkstra_combined('Bendigo', self.target_site)
+        end_time = sec.time()
         print("Task 1 - All Teams:")
         print("Path:", self.all_teams_route['path'])
         print("Total Distance:", self.all_teams_route['distance'])
         print("Total Time:", self.all_teams_route['time'])
+        print("Run Time:", self.nano(end_time - start_time), "seconds")
         self.visualize_task_1()
         print()
 
@@ -471,6 +475,7 @@ class PangobatResponseManager:
 
         
         """
+        start_time = sec.time()
         start_town = self.target_site
         only_infected = False
         if only_infected:
@@ -484,7 +489,7 @@ class PangobatResponseManager:
             if not towns_within_radius:
                 print("No towns found within the specified radius.")
                 return
-        
+
         use_nearest_neighbor = True  # Set to True to use Nearest Neighbor, a better algo for U4 if flag is false
 
         if use_nearest_neighbor:
@@ -494,10 +499,12 @@ class PangobatResponseManager:
             pass
 
         self.medical_route = medical_route
+        end_time = sec.time()
         print("Task 2 - Medical Team:")
         print("Path:", medical_route['path'])
         print("Total Distance:", medical_route['distance'])
         print("Total Time:", medical_route['time'])
+        print("Run Time:", self.nano(end_time - start_time), "seconds")
         self.visualize_task_2()
         print()
 
@@ -547,10 +554,10 @@ class PangobatResponseManager:
         algorithm_end
 
         """
-        start_town = self.target_site
-
+        start_time = sec.time()
         print("Task 3 - Search Teams:")
-        search_teams = self.breadth_first_search(start_town, radius)
+        search_teams = self.breadth_first_search(self.target_site, radius)
+        end_time = sec.time()
         self.search_teams = search_teams
         self.visualize_task_3()
         for team_number, time, path, total_time, total_distance in search_teams:
@@ -562,6 +569,7 @@ class PangobatResponseManager:
                 else:
                     print(f"{town} (Not Infected)")
             print()
+        print("Run Time:", self.nano(end_time - start_time) , "seconds")
 
 # Params
 edges_file = 'SAT 2024 Student Data/edges.csv'
@@ -575,7 +583,7 @@ response_manager.visualize_graph()
 target_site = 'Rye'
 response_manager.target_site = target_site
 
-radius = 50
+radius = 500
 
 # Executing tasks
 response_manager.task_1()
