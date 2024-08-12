@@ -2,10 +2,11 @@ import networkx as nx
 import pandas as pd
 import math
 import time
-from termcolor import colored
 from matplotlib import pyplot as plt
 import random
-
+import pygame
+import heapq
+from collections import defaultdict
 BLACK = '\033[30m'
 RED = '\033[31m'
 GREEN = '\033[32m'
@@ -136,6 +137,106 @@ class PangobatResponseManager:
         plt.axis('off')
         plt.tight_layout()
         plt.show()
+    def grid_representation(self, start, target):
+        """
+        Converts the graph data into a grid-like structure for A* visualization.
+
+        This function takes in a starting node and a target node as input and returns a dictionary representing the grid-like structure. The grid is a 2D list where each cell represents a node in the graph. The function also initializes a pygame window for visualization.
+
+        Parameters:
+            start (str): The starting node.
+            target (str): The target node.
+
+        Returns:
+            grid (list of lists): The grid-like structure representing the graph.
+            window (pygame.Surface): The pygame window for visualization.
+        """
+        # Initialize the grid
+        grid = defaultdict(lambda: defaultdict(lambda: {'node': None, 'color': 'black'}))
+        for node in self.G.nodes:
+            grid[node][node]['node'] = node
+            grid[node][node]['color'] = 'white'  # Set discovered nodes to white
+
+        # Set the start and target nodes
+        grid[start][start]['color'] = 'red'
+        grid[target][target]['color'] = 'green'
+
+        # Calculate node positions for the grid
+        pos = nx.get_node_attributes(self.G, 'pos')
+        for node, (x, y) in pos.items():
+            grid[node][node]['x'] = int(x * 100)  # Scale the coordinates for the grid
+            grid[node][node]['y'] = int(y * 100)
+
+        # Initialize pygame window
+        pygame.init()
+        window_width = 800
+        window_height = 600
+        window = pygame.display.set_mode((window_width, window_height))
+        pygame.display.set_caption("A* Algorithm Visualization")
+
+        return grid, window
+
+    def a_star_visualization(self, start, target):
+        """
+        Visualizes the A* algorithm using the grid representation of the graph.
+
+        This function takes in a starting node and a target node as input and uses the A* algorithm to find the shortest path. The function then visualizes the algorithm by updating the colors of the nodes in the grid representation. The current node is colored blue, the start node is red, the target node is green, and the discovered nodes are white.
+
+        Parameters:
+            start (str): The starting node.
+            target (str): The target node.
+
+        Returns:
+            None
+        """
+        # Get the grid representation and pygame window
+        grid, window = self.grid_representation(start, target)
+
+        # Initialize the priority queue for A*
+        open_set = [(0, start)]
+        came_from = {}
+        g_score = {node: float('inf') for node in self.G.nodes}
+        g_score[start] = 0
+        f_score = {node: float('inf') for node in self.G.nodes}
+        f_score[start] = 0
+
+        while open_set:
+            current_f_score, current_node = heapq.heappop(open_set)
+
+            # Update the color of the current node to blue
+            grid[current_node][current_node]['color'] = 'blue'
+            pygame.draw.circle(window, pygame.Color(grid[current_node][current_node]['color']), (int(grid[current_node][current_node]['x'], grid[current_node][current_node]['y']), 15))
+            pygame.display.update()
+            time.sleep(0.1)
+
+            if current_node == target:
+                break
+
+            for neighbor, data in self.G[current_node].items():
+                new_g_score = g_score[current_node] + data['distance']
+                new_f_score = new_g_score + self.haversine_distance(self.nodes.loc[current_node, 'Longitude'], self.nodes.loc[current_node, 'Latitude'], self.nodes.loc[neighbor, 'Longitude'], self.nodes.loc[neighbor, 'Latitude'])
+
+                if new_f_score < f_score[neighbor]:
+                    came_from[neighbor] = current_node
+                    g_score[neighbor] = new_g_score
+                    f_score[neighbor] = new_f_score
+
+                    # Update the color of the neighbor node to white
+                    grid[neighbor][neighbor]['color'] = 'white'
+                    pygame.draw.circle(window, pygame.Color(grid[neighbor][neighbor]['color']), (int(grid[neighbor][neighbor]['x'], int(grid[neighbor][neighbor]['y'])), 15))  # Convert y-coordinate to integer
+                    pygame.display.update()
+                    time.sleep(0.1)
+    
+                    heapq.heappush(open_set, (new_f_score, neighbor))
+
+        # Draw the final path in green
+        current_node = target
+        while current_node != start:
+            previous_node = came_from[current_node]
+            pygame.draw.line(window, pygame.Color('green'), (int(grid[current_node][current_node]['x'], grid[current_node][current_node]['y']), (int(grid[previous_node][previous_node]['x'], grid[previous_node][previous_node]['y'])), 3))
+            pygame.display.update()
+            time.sleep(0.1)
+            current_node = previous_node
 
 if __name__ == "__main__":
     input_prompt = input(f"Would you like to {BRIGHT_BLUE}{UNDERLINE}load edges and nodes?{RESET}{BLUE} [y/n]{RESET} ")
@@ -168,7 +269,8 @@ if __name__ == "__main__":
             target_town = input(f"{UNDERLINE}Enter Choice:{RESET} ")
         radius = input(f"{YELLOW}Enter search radius:{RESET} ")
         response_manager.identify_infected_towns()
-        print("{BOLD}{UNDERLINE}Task 1 - All Teams:{RESET}")
+        start_town = "Bendigo"
+        response_manager.a_star_visualization(start_town, target_town)
 
     else:
         print(RED + "Exiting..." + RESET)
