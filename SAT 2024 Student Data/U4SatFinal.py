@@ -7,6 +7,16 @@ import random
 import pygame
 import heapq
 from collections import defaultdict
+
+#bring window to front forcefully (PyGame)
+from os import environ
+environ['PYGAME_HIDE_SUPPORT_PROMPT'] = "hide"
+import pygame  # import after disabling environ prompt
+from win32gui import SetWindowPos
+import tkinter as tk
+root = tk.Tk() 
+root.withdraw()
+screen_w, screen_h = root.winfo_screenwidth(), root.winfo_screenheight()
 BLACK = '\033[30m'
 RED = '\033[31m'
 GREEN = '\033[32m'
@@ -37,240 +47,258 @@ class PangobatResponseManager:
         self.infected_towns = []
 
     def load_data(self):
-        """
-        Loads data from CSV files containing edges and nodes information.
-
-        This function reads the edges and nodes data from the CSV files specified by `self.edges_file` and `self.nodes_file`, respectively. The data is then used to create an undirected graph `self.G` using the `from_pandas_edgelist` function from the NetworkX library. The graph is converted to an undirected graph using the `to_undirected` method.
-
-        Additionally, the function sets the positions for the nodes in the graph based on their latitude and longitude information. The positions are stored as node attributes in the graph with the key 'pos'.
-
-        Parameters:
-        - None
-
-        Returns:
-        - None
-        """
-        # Load edges and nodes data from CSV files
         self.edges = pd.read_csv(self.edges_file, header=0, names=['Town1', 'Town2', 'Distance', 'Time'])
         self.nodes = pd.read_csv(self.nodes_file, header=0, names=['Town', 'Population', 'Income', 'Latitude', 'Longitude', 'Age'])
-
-        # Create an undirected graph from the edges data
         self.G = nx.Graph()
         for i, row in self.edges.iterrows():
             self.G.add_edge(row['Town1'], row['Town2'], distance=row['Distance'], time=row['Time'])
-
-        # Set positions for nodes based on latitude and longitude
         pos = {town: (lon, lat) for town, lon, lat in zip(self.nodes['Town'], self.nodes['Longitude'], self.nodes['Latitude'])}
         nx.set_node_attributes(self.G, pos, 'pos')
 
     def haversine_distance(self, lon1, lat1, lon2, lat2):
-        """
-        Calculate the distance between two sets of longitude and latitude coordinates using the Haversine formula.
-
-        Parameters:
-            lon1 (float): The longitude of the first set of coordinates.
-            lat1 (float): The latitude of the first set of coordinates.
-            lon2 (float): The longitude of the second set of coordinates.
-            lat2 (float): The latitude of the second set of coordinates.
-
-        Returns:
-            float: The distance between the two sets of coordinates in kilometers.
-        """
-        # Haversine formula to calculate the distance between two sets of longitude and latitude coordinates
-        # Returns distance in kilometers
         lon1, lat1, lon2, lat2 = map(math.radians, [lon1, lat1, lon2, lat2])
         dlon = lon2 - lon1
         dlat = lat2 - lat1
         a = math.sin(dlat / 2) ** 2 + math.cos(lat1) * math.cos(lat2) * math.sin(dlon / 2) ** 2
         c = 2 * math.asin(math.sqrt(a))
-        r = 6371  # Earth's radius in kilometers
+        r = 6371
         return c * r
 
     def identify_infected_towns(self):
-        """
-        Identifies infected towns based on a random infection probability.
-
-        This function generates a random integer between 0 and 50 and uses it as a seed for the random number generator. It then iterates over the rows of the 'nodes' DataFrame, and for each row, generates a random number between 0 and 1. If the generated number is less than the infection probability, the town in the current row is added to the list of infected towns, if it is not already in the list. Finally, the function prints the list of infected towns.
-
-        Parameters:
-            self (PangobatResponseManager): The instance of the PangobatResponseManager class.
-
-        Returns:
-            None
-        """
         random.seed(42)
         infection_probability = 0.3
-
         for index, row in self.nodes.iterrows():
             town = row['Town']
             if random.random() < infection_probability:
                 if town not in self.infected_towns:
                     self.infected_towns.append(town)
         print(f"{BRIGHT_RED}{UNDERLINE}Infected Towns:{RESET} {RED}{self.infected_towns}{RESET}")
-
+        
     def visualize_graph(self):
-        """
-        Visualizes the Pangobat Response Network graph using matplotlib.
-
-        This function creates a network graph using the nodes and edges of the PangobatResponseManager instance. It then visualizes the graph by drawing the nodes and edges on a matplotlib figure. The nodes are represented as blue circles with a size of 300 pixels, and the edges are represented as gray lines with a width of 1.0 pixels and an opacity of 0.5. The function also adds labels to the nodes and sets the title of the graph to 'Pangobat Response Network'.
-
-        Parameters:
-            self (PangobatResponseManager): The instance of the PangobatResponseManager class.
-
-        Returns:
-            None
-        """
         plt.figure(figsize=(12, 8))
-
-        # Set positions for nodes based on latitude and longitude
         pos = nx.get_node_attributes(self.G, 'pos')
-
-        # Draw nodes and edges
         nx.draw_networkx_nodes(self.G, pos, node_color='skyblue', node_size=300, alpha=0.8)
         nx.draw_networkx_edges(self.G, pos, edge_color='gray', width=1.0, alpha=0.5)
-
-        # Add labels to nodes
         labels = {town: town for town in self.G.nodes}
         nx.draw_networkx_labels(self.G, pos, labels, font_size=10, font_color='black')
-
         plt.title('Pangobat Response Network')
         plt.axis('off')
         plt.tight_layout()
         plt.show()
-    def grid_representation(self, start, target):
-        """
-        Converts the graph data into a grid-like structure for A* visualization.
 
-        This function takes in a starting node and a target node as input and returns a dictionary representing the grid-like structure. The grid is a 2D list where each cell represents a node in the graph. The function also initializes a pygame window for visualization.
-
-        Parameters:
-            start (str): The starting node.
-            target (str): The target node.
-
-        Returns:
-            grid (list of lists): The grid-like structure representing the graph.
-            window (pygame.Surface): The pygame window for visualization.
-        """
-        # Initialize the grid
-        grid = defaultdict(lambda: defaultdict(lambda: {'node': None, 'color': 'black'}))
-        for node in self.G.nodes:
-            grid[node][node]['node'] = node
-            grid[node][node]['color'] = 'white'  # Set discovered nodes to white
-
-        # Set the start and target nodes
-        grid[start][start]['color'] = 'red'
-        grid[target][target]['color'] = 'green'
-
-        # Calculate node positions for the grid
-        pos = nx.get_node_attributes(self.G, 'pos')
-        for node, (x, y) in pos.items():
-            grid[node][node]['x'] = int(x * 100)  # Scale the coordinates for the grid
-            grid[node][node]['y'] = int(y * 100)
-
-        # Initialize pygame window
+    def visualize_path(self, start, target, path, came_from):
+        def draw_grid():
+            screen.fill((0, 0, 0))
+            for edge in self.G.edges:
+                pygame.draw.line(screen, (128, 128, 128), pos_scaled[edge[0]], pos_scaled[edge[1]], 1)
+                # Labels
+                edge_midpoint = ((pos_scaled[edge[0]][0] + pos_scaled[edge[1]][0]) // 2, 
+                                 (pos_scaled[edge[0]][1] + pos_scaled[edge[1]][1]) // 2)
+                distance = self.G[edge[0]][edge[1]]['distance']
+                text_surface = font.render(str(distance), True, (255, 255, 255))
+                screen.blit(text_surface, edge_midpoint)
+            for node in self.G.nodes:
+                color = (255, 255, 255)
+                if node == start:
+                    color = (255, 0, 0)
+                elif node == target:
+                    color = (0, 255, 0)
+                elif node in came_from:
+                    color = (0, 0, 255)
+                pygame.draw.circle(screen, color, pos_scaled[node], node_radius)
+                # Draw node labels
+                text_surface = font.render(node, True, (255, 255, 255))
+                screen.blit(text_surface, (pos_scaled[node][0] + node_radius, pos_scaled[node][1] + node_radius))
+            pygame.display.flip()
+    
+        def draw_path():
+            for current in path:
+                if current in came_from:
+                    pygame.draw.line(screen, (0, 255, 0), pos_scaled[current], pos_scaled[came_from[current]], 3)
+                    pygame.display.flip()
+                    time.sleep(0.5)
+    
+        # Grid and Pygame settings
+        grid_size = 28
+        node_radius = 14
+        screen_width = 1600
+        screen_height = 1200
+    
         pygame.init()
-        window_width = 800
-        window_height = 600
-        window = pygame.display.set_mode((window_width, window_height))
+        screen = pygame.display.set_mode((screen_width, screen_height))
+        x = round((screen_w - screen_width) / 2)
+        y = round((screen_h - screen_height) / 2 * 0.8)
+        SetWindowPos(pygame.display.get_wm_info()['window'], -1, x, y, 0, 0, 1)
         pygame.display.set_caption("A* Algorithm Visualization")
+        font = pygame.font.SysFont(None, 20)
+    
+        pos = nx.get_node_attributes(self.G, 'pos')
+        min_lon = min(pos[node][0] for node in pos)
+        max_lon = max(pos[node][0] for node in pos)
+        min_lat = min(pos[node][1] for node in pos)
+        max_lat = max(pos[node][1] for node in pos)
+    
+        pos_scaled = {node: (int((lon - min_lon) / (max_lon - min_lon) * (screen_width - 40) + 20), 
+                             int((lat - min_lat) / (max_lat - min_lat) * (screen_height - 40) + 20)) 
+                      for node, (lon, lat) in pos.items()}
+    
+        draw_grid()
+        draw_path()
+    
+        while True:
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    pygame.quit()
+                    return
 
-        return grid, window
+    def a_star_algorithm(self, start, target, use_bidirectional=False):
+        def heuristic(node1, node2):
+            lon1, lat1 = self.nodes.loc[self.nodes['Town'] == node1, ['Longitude', 'Latitude']].values[0]
+            lon2, lat2 = self.nodes.loc[self.nodes['Town'] == node2, ['Longitude', 'Latitude']].values[0]
+            return self.haversine_distance(lon1, lat1, lon2, lat2)
 
-    def a_star_visualization(self, start, target):
-        """
-        Visualizes the A* algorithm using the grid representation of the graph.
+        if use_bidirectional:
+            self.bidirectional_a_star(start, target, heuristic)
+        else:
+            open_set = [(0, start)]
+            heapq.heapify(open_set)
+            came_from = {}
+            g_score = {node: float('inf') for node in self.G.nodes}
+            g_score[start] = 0
+            f_score = {node: float('inf') for node in self.G.nodes}
+            f_score[start] = heuristic(start, target)
 
-        This function takes in a starting node and a target node as input and uses the A* algorithm to find the shortest path. The function then visualizes the algorithm by updating the colors of the nodes in the grid representation. The current node is colored blue, the start node is red, the target node is green, and the discovered nodes are white.
+            while open_set:
+                current = heapq.heappop(open_set)[1]
+                if current == target:
+                    break
+                for neighbor in self.G.neighbors(current):
+                    tentative_g_score = g_score[current] + self.G[current][neighbor]['distance']
+                    if tentative_g_score < g_score[neighbor]:
+                        came_from[neighbor] = current
+                        g_score[neighbor] = tentative_g_score
+                        f_score[neighbor] = g_score[neighbor] + heuristic(neighbor, target)
+                        heapq.heappush(open_set, (f_score[neighbor], neighbor))
 
-        Parameters:
-            start (str): The starting node.
-            target (str): The target node.
+            path = []
+            current = target
+            while current in came_from:
+                path.append(current)
+                current = came_from[current]
+            path.append(start)
+            path.reverse()
 
-        Returns:
-            None
-        """
-        # Get the grid representation and pygame window
-        grid, window = self.grid_representation(start, target)
+            self.visualize_path(start, target, path, came_from)
 
-        # Initialize the priority queue for A*
-        open_set = [(0, start)]
-        came_from = {}
-        g_score = {node: float('inf') for node in self.G.nodes}
-        g_score[start] = 0
-        f_score = {node: float('inf') for node in self.G.nodes}
-        f_score[start] = 0
+    def bidirectional_a_star(self, start, target, heuristic):
+        def reconstruct_path(came_from, current):
+            path = [current]
+            while current in came_from:
+                current = came_from[current]
+                path.append(current)
+            return path[::-1]
 
-        while open_set:
-            current_f_score, current_node = heapq.heappop(open_set)
+        open_set_start = [(0, start)]
+        open_set_target = [(0, target)]
+        heapq.heapify(open_set_start)
+        heapq.heapify(open_set_target)
 
-            # Update the color of the current node to blue
-            grid[current_node][current_node]['color'] = 'blue'
-            pygame.draw.circle(window, pygame.Color(grid[current_node][current_node]['color']), (int(grid[current_node][current_node]['x'], grid[current_node][current_node]['y']), 15))
-            pygame.display.update()
-            time.sleep(0.1)
+        came_from_start = {}
+        came_from_target = {}
+        g_score_start = {node: float('inf') for node in self.G.nodes}
+        g_score_target = {node: float('inf') for node in self.G.nodes}
+        g_score_start[start] = 0
+        g_score_target[target] = 0
+        f_score_start = {node: float('inf') for node in self.G.nodes}
+        f_score_target = {node: float('inf') for node in self.G.nodes}
+        f_score_start[start] = heuristic(start, target)
+        f_score_target[target] = heuristic(target, start)
 
-            if current_node == target:
+        visited_start = set()
+        visited_target = set()
+
+        meeting_node = None
+
+        while open_set_start and open_set_target:
+            current_start = heapq.heappop(open_set_start)[1]
+            current_target = heapq.heappop(open_set_target)[1]
+
+            visited_start.add(current_start)
+            visited_target.add(current_target)
+
+            if current_start in came_from_target:
+                meeting_node = current_start
                 break
 
-            for neighbor, data in self.G[current_node].items():
-                new_g_score = g_score[current_node] + data['distance']
-                new_f_score = new_g_score + self.haversine_distance(self.nodes.loc[current_node, 'Longitude'], self.nodes.loc[current_node, 'Latitude'], self.nodes.loc[neighbor, 'Longitude'], self.nodes.loc[neighbor, 'Latitude'])
+            if current_target in came_from_start:
+                meeting_node = current_target
+                break
 
-                if new_f_score < f_score[neighbor]:
-                    came_from[neighbor] = current_node
-                    g_score[neighbor] = new_g_score
-                    f_score[neighbor] = new_f_score
+            for neighbor in self.G.neighbors(current_start):
+                tentative_g_score = g_score_start[current_start] + self.G[current_start][neighbor]['distance']
+                if tentative_g_score < g_score_start[neighbor]:
+                    came_from_start[neighbor] = current_start
+                    g_score_start[neighbor] = tentative_g_score
+                    f_score_start[neighbor] = g_score_start[neighbor] + heuristic(neighbor, target)
+                    heapq.heappush(open_set_start, (f_score_start[neighbor], neighbor))
 
-                    # Update the color of the neighbor node to white
-                    grid[neighbor][neighbor]['color'] = 'white'
-                    pygame.draw.circle(window, pygame.Color(grid[neighbor][neighbor]['color']), (int(grid[neighbor][neighbor]['x'], int(grid[neighbor][neighbor]['y'])), 15))  # Convert y-coordinate to integer
-                    pygame.display.update()
-                    time.sleep(0.1)
-    
-                    heapq.heappush(open_set, (new_f_score, neighbor))
+            for neighbor in self.G.neighbors(current_target):
+                tentative_g_score = g_score_target[current_target] + self.G[current_target][neighbor]['distance']
+                if tentative_g_score < g_score_target[neighbor]:
+                    came_from_target[neighbor] = current_target
+                    g_score_target[neighbor] = tentative_g_score
+                    f_score_target[neighbor] = g_score_target[neighbor] + heuristic(neighbor, start)
+                    heapq.heappush(open_set_target, (f_score_target[neighbor], neighbor))
 
-        # Draw the final path in green
-        current_node = target
-        while current_node != start:
-            previous_node = came_from[current_node]
-            pygame.draw.line(window, pygame.Color('green'), (int(grid[current_node][current_node]['x'], grid[current_node][current_node]['y']), (int(grid[previous_node][previous_node]['x'], grid[previous_node][previous_node]['y'])), 3))
-            pygame.display.update()
-            time.sleep(0.1)
-            current_node = previous_node
+        if meeting_node is None:
+            print(f"No path found between {start} and {target}.")
+            return
+
+        path_start = reconstruct_path(came_from_start, meeting_node)
+        path_target = reconstruct_path(came_from_target, meeting_node)
+        path_target.reverse()
+
+        path = path_start + path_target[1:]
+
+        # Print the nodes visited by each A* search
+        print(f"{BRIGHT_GREEN}Nodes visited by A* search from {start}: {', '.join(visited_start)}{RESET}")
+        print(f"{BRIGHT_GREEN}Nodes visited by A* search from {target}: {', '.join(visited_target)}{RESET}")
+
+        # Print the combined path
+        print(f"{BRIGHT_GREEN}Combined Path from {start} to {target}: {' -> '.join(path)}{RESET}")
+
+        # Visualize the path with an additional green line between segments
+        self.visualize_path(start, target, path, {**came_from_start, **came_from_target})
+
+
 
 if __name__ == "__main__":
     input_prompt = input(f"Would you like to {BRIGHT_BLUE}{UNDERLINE}load edges and nodes?{RESET}{BLUE} [y/n]{RESET} ")
     if input_prompt.lower() == 'y':
         edges_file = 'SAT 2024 Student Data/edges.csv'
         nodes_file = 'SAT 2024 Student Data/nodes.csv'
-
         response_manager = PangobatResponseManager(edges_file, nodes_file)
         response_manager.load_data()
-
         print_prompt = input(f"Would you like to print {BRIGHT_RED}{UNDERLINE}all loaded data?{RESET}{RED}[y/n]{RESET} ")
         if print_prompt.lower() == 'y':
-            print("Graph Data:",
-            response_manager.G.nodes.data(),
-            response_manager.G.edges.data(),
-            "\nNodes Dataframe:",
-            response_manager.nodes,
-            "\nEdges Dataframe:",
-            response_manager.edges)
-
+            print("Graph Data:", response_manager.G.nodes.data(), response_manager.G.edges.data(), "\nNodes Dataframe:", response_manager.nodes, "\nEdges Dataframe:", response_manager.edges)
         vis_map = input(f"{BRIGHT_YELLOW}Display map? [y/n]{RESET} ")
         if vis_map.lower() == 'y':
             print(f"\n{BRIGHT_RED}{BOLD}LOADING GRAPH...{RESET}")
             time.sleep(1)
             response_manager.visualize_graph()
         target_town = input(f"Input the {UNDERLINE}target town{RESET} to setup {MAGENTA}base camp{RESET} in, {YELLOW}[?]{RESET} [Town]: ")
-        if target_town == "?":
+        if target_town == "?" or target_town not in response_manager.G.nodes:
             all_towns = list(response_manager.G.nodes)
             print(f"{GREEN}All towns: {', '.join(all_towns)}{RESET}")
             target_town = input(f"{UNDERLINE}Enter Choice:{RESET} ")
         radius = input(f"{YELLOW}Enter search radius:{RESET} ")
         response_manager.identify_infected_towns()
         start_town = "Bendigo"
-        response_manager.a_star_visualization(start_town, target_town)
 
+        bidirectional_flag = input(f"Would you like to use {BRIGHT_BLUE}{UNDERLINE}bidirectional A*{RESET}{BLUE}? [y/n]{RESET} ")
+        bidirectional = bidirectional_flag.lower() == 'y'
+        
+        response_manager.a_star_algorithm(start_town, target_town, bidirectional)
     else:
         print(RED + "Exiting..." + RESET)
