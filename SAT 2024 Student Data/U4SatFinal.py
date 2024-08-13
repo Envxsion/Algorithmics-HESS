@@ -7,6 +7,7 @@ import random
 import pygame
 import heapq
 from collections import defaultdict
+import os
 
 #bring window to front forcefully (PyGame)
 from os import environ
@@ -45,6 +46,11 @@ class PangobatResponseManager:
         self.edges = None
         self.nodes = None
         self.infected_towns = []
+        self.last_best_file = 'SAT 2024 Student Data/lastbest.csv'
+        self.ts = None
+        self.tt = None
+        self.tp = None
+        self.tc = None
 
     def load_data(self):
         self.edges = pd.read_csv(self.edges_file, header=0, names=['Town1', 'Town2', 'Distance', 'Time'])
@@ -64,6 +70,11 @@ class PangobatResponseManager:
         r = 6371
         return c * r
 
+    def heuristic(self, node1, node2):
+        lon1, lat1 = self.nodes.loc[self.nodes['Town'] == node1, ['Longitude', 'Latitude']].values[0]
+        lon2, lat2 = self.nodes.loc[self.nodes['Town'] == node2, ['Longitude', 'Latitude']].values[0]
+        return self.haversine_distance(lon1, lat1, lon2, lat2)
+
     def identify_infected_towns(self):
         random.seed(42)
         infection_probability = 0.3
@@ -73,6 +84,64 @@ class PangobatResponseManager:
                 if town not in self.infected_towns:
                     self.infected_towns.append(town)
         print(f"{BRIGHT_RED}{UNDERLINE}Infected Towns:{RESET} {RED}{self.infected_towns}{RESET}")
+        
+    def time_algorithm(self, algorithm_name, func, *args, **kwargs):
+        start_time = time.time()
+        func(*args, **kwargs)
+        end_time = time.time()
+        elapsed_time = end_time - start_time
+        print(f"{algorithm_name} took {elapsed_time:.4f} seconds.")
+
+        # Read or create the lastbest.csv file
+        if not os.path.exists(self.last_best_file):
+            # Create a new DataFrame with the current algorithm time
+            df = pd.DataFrame({
+                'Algorithm': [algorithm_name],
+                'Time': [elapsed_time]
+            })
+            df.to_csv(self.last_best_file, index=False)
+            print(f"Recorded {BRIGHT_YELLOW}{UNDERLINE}{elapsed_time:.4f} seconds{RESET} for {MAGENTA}{algorithm_name}{RESET} in a new file.")
+        else:
+            try:
+                df = pd.read_csv(self.last_best_file)
+                if df.empty:
+                    # File is empty, create a new DataFrame with the current algorithm time
+                    df = pd.DataFrame({
+                        'Algorithm': [algorithm_name],
+                        'Time': [elapsed_time]
+                    })
+                else:
+                    if algorithm_name in df['Algorithm'].values:
+                        best_time = df.loc[df['Algorithm'] == algorithm_name, 'Time'].values[0]
+                        if elapsed_time < best_time:
+                            df.loc[df['Algorithm'] == algorithm_name, 'Time'] = elapsed_time
+                            print(f"{YELLOW}Previous best {RESET} time was {BRIGHT_YELLOW}{UNDERLINE}{best_time} seconds{RESET}. Updated best time for {UNDERLINE}{algorithm_name}{RESET} to {BRIGHT_GREEN}{elapsed_time:.4f} seconds{RESET}.")
+                        else:
+                            print(f"{RED}No improvement{RESET} for {YELLOW}{algorithm_name}{RESET}. Best time remains {BRIGHT_YELLOW}{UNDERLINE}{best_time:.4f} seconds{RESET}.")
+                    else:
+                        new_entry = pd.DataFrame({
+                            'Algorithm': [algorithm_name],
+                            'Time': [elapsed_time]
+                        })
+                        df = pd.concat([df, new_entry], ignore_index=True)
+                        print(f"Recorded {BRIGHT_YELLOW}{UNDERLINE}{elapsed_time:.4f} seconds{RESET} for {MAGENTA}{algorithm_name}{RESET} in the file.")
+
+                df.to_csv(self.last_best_file, index=False)
+            except pd.errors.EmptyDataError:
+                # File exists but is empty, create a new DataFrame with the current algorithm time
+                df = pd.DataFrame({
+                    'Algorithm': [algorithm_name],
+                    'Time': [elapsed_time]
+                })
+                df.to_csv(self.last_best_file, index=False)
+                print(f"Recorded {elapsed_time:.4f} seconds for {algorithm_name} in a new file.")
+        
+    def a_star_timed(self, start, target, use_bidirectional=False):
+        if use_bidirectional:
+            self.time_algorithm('Bidirectional A*', self.bidirectional_a_star, start, target, self.heuristic)
+        else:
+            self.time_algorithm('A*', self.a_star_algorithm_internal, start, target)
+        self.visualize_path(self.ts,self.tt,self.tp,self.tc)
         
     def visualize_graph(self):
         plt.figure(figsize=(12, 8))
@@ -151,44 +220,46 @@ class PangobatResponseManager:
                     pygame.quit()
                     return
 
-    def a_star_algorithm(self, start, target, use_bidirectional=False):
+    def a_star_algorithm_internal(self, start, target):
         def heuristic(node1, node2):
             lon1, lat1 = self.nodes.loc[self.nodes['Town'] == node1, ['Longitude', 'Latitude']].values[0]
             lon2, lat2 = self.nodes.loc[self.nodes['Town'] == node2, ['Longitude', 'Latitude']].values[0]
             return self.haversine_distance(lon1, lat1, lon2, lat2)
+        
+        frontier = [(0, start)]
+        heapq.heapify(frontier)
+        came_from = {}
+        cost_so_far = {start: 0}
+        visited = set()
 
-        if use_bidirectional:
-            self.bidirectional_a_star(start, target, heuristic)
-        else:
-            open_set = [(0, start)]
-            heapq.heapify(open_set)
-            came_from = {}
-            g_score = {node: float('inf') for node in self.G.nodes}
-            g_score[start] = 0
-            f_score = {node: float('inf') for node in self.G.nodes}
-            f_score[start] = heuristic(start, target)
+        while frontier:
+            current_priority, current_node = heapq.heappop(frontier)
 
-            while open_set:
-                current = heapq.heappop(open_set)[1]
-                if current == target:
-                    break
-                for neighbor in self.G.neighbors(current):
-                    tentative_g_score = g_score[current] + self.G[current][neighbor]['distance']
-                    if tentative_g_score < g_score[neighbor]:
-                        came_from[neighbor] = current
-                        g_score[neighbor] = tentative_g_score
-                        f_score[neighbor] = g_score[neighbor] + heuristic(neighbor, target)
-                        heapq.heappush(open_set, (f_score[neighbor], neighbor))
+            if current_node == target:
+                path = []
+                while current_node != start:
+                    path.append(current_node)
+                    current_node = came_from[current_node]
+                path.append(start)
+                path.reverse()
+                self.ts = start
+                self.tt = target
+                self.tp = path
+                self.tc = came_from
+                return path
 
-            path = []
-            current = target
-            while current in came_from:
-                path.append(current)
-                current = came_from[current]
-            path.append(start)
-            path.reverse()
+            visited.add(current_node)
 
-            self.visualize_path(start, target, path, came_from)
+            for neighbor in self.G.neighbors(current_node):
+                new_cost = cost_so_far[current_node] + self.G[current_node][neighbor]['distance']
+
+                if neighbor not in cost_so_far or new_cost < cost_so_far[neighbor]:
+                    cost_so_far[neighbor] = new_cost
+                    priority = new_cost + heuristic(neighbor, target)
+                    heapq.heappush(frontier, (priority, neighbor))
+                    came_from[neighbor] = current_node
+
+        return None
 
     def bidirectional_a_star(self, start, target, heuristic):
         def reconstruct_path(came_from, current):
@@ -266,9 +337,11 @@ class PangobatResponseManager:
 
         # Print the combined path
         print(f"{BRIGHT_GREEN}Combined Path from {start} to {target}: {' -> '.join(path)}{RESET}")
+        self.ts = start
+        self.tt = target
+        self.tp = path
+        self.tc = {**came_from_start, **came_from_target}
 
-        # Visualize the path with an additional green line between segments
-        self.visualize_path(start, target, path, {**came_from_start, **came_from_target})
 
 
 
@@ -277,6 +350,7 @@ if __name__ == "__main__":
     if input_prompt.lower() == 'y':
         edges_file = 'SAT 2024 Student Data/edges.csv'
         nodes_file = 'SAT 2024 Student Data/nodes.csv'
+        last_best = 'SAT 2024 Student Data/lastbest.csv'
         response_manager = PangobatResponseManager(edges_file, nodes_file)
         response_manager.load_data()
         print_prompt = input(f"Would you like to print {BRIGHT_RED}{UNDERLINE}all loaded data?{RESET}{RED}[y/n]{RESET} ")
@@ -299,6 +373,6 @@ if __name__ == "__main__":
         bidirectional_flag = input(f"Would you like to use {BRIGHT_BLUE}{UNDERLINE}bidirectional A*{RESET}{BLUE}? [y/n]{RESET} ")
         bidirectional = bidirectional_flag.lower() == 'y'
         
-        response_manager.a_star_algorithm(start_town, target_town, bidirectional)
+        response_manager.a_star_timed(start_town, target_town, bidirectional)
     else:
         print(RED + "Exiting..." + RESET)
