@@ -1,13 +1,18 @@
-import networkx as nx
+from matplotlib import pyplot as plt
+import os
 import pandas as pd
+import networkx as nx
 import math
 import time
-from matplotlib import pyplot as plt
-import random
 import pygame
+import random
 import heapq
 from collections import defaultdict
-import os
+from os import environ
+from win32gui import SetWindowPos
+import tkinter as tk
+import numpy as np
+import itertools
 
 #bring window to front forcefully (PyGame)
 from os import environ
@@ -341,9 +346,153 @@ class PangobatResponseManager:
         self.tt = target
         self.tp = path
         self.tc = {**came_from_start, **came_from_target}
+    def held_karp(self, nodes_within_radius, start):
+        n = len(nodes_within_radius)
+        all_nodes = range(n)
+        start_index = nodes_within_radius.index(start)
+        dist = lambda i, j: self.haversine_distance(
+            self.nodes.loc[self.nodes['Town'] == nodes_within_radius[i], 'Longitude'].values[0],
+            self.nodes.loc[self.nodes['Town'] == nodes_within_radius[i], 'Latitude'].values[0],
+            self.nodes.loc[self.nodes['Town'] == nodes_within_radius[j], 'Longitude'].values[0],
+            self.nodes.loc[self.nodes['Town'] == nodes_within_radius[j], 'Latitude'].values[0]
+        )
+        
+        memo = {}
+        for k in all_nodes:
+            if k != start_index:
+                memo[(1 << k, k)] = dist(start_index, k)
+        
+        for subset_size in range(2, n):
+            for subset in itertools.combinations([x for x in all_nodes if x != start_index], subset_size):
+                bits = 1 << start_index
+                for bit in subset:
+                    bits |= 1 << bit
+                for k in subset:
+                    prev_bits = bits & ~(1 << k)
+                    result = float('inf')
+                    for m in subset:
+                        if m == k:
+                            continue
+                        new_distance = memo[(prev_bits, m)] + dist(m, k)
+                        if new_distance < result:
+                            result = new_distance
+                    memo[(bits, k)] = result
+        
+        bits = (1 << n) - 1
+        result = float('inf')
+        for k in all_nodes:
+            if k == start_index:
+                continue
+            new_distance = memo[(bits, k)] + dist(k, start_index)
+            if new_distance < result:
+                result = new_distance
+        return result
 
+    def simulated_annealing(self, nodes_within_radius, start):
+        def distance(route):
+            return sum(self.haversine_distance(
+                self.nodes.loc[self.nodes['Town'] == route[i], 'Longitude'].values[0],
+                self.nodes.loc[self.nodes['Town'] == route[i], 'Latitude'].values[0],
+                self.nodes.loc[self.nodes['Town'] == route[i + 1], 'Longitude'].values[0],
+                self.nodes.loc[self.nodes['Town'] == route[i + 1], 'Latitude'].values[0]
+            ) for i in range(len(route) - 1))
+        
+        current_route = nodes_within_radius[:]
+        current_route.remove(start)
+        current_route.insert(0, start)
+        current_distance = distance(current_route)
+        T = 1.0
+        T_min = 0.00001
+        alpha = 0.995
+        
+        while T > T_min:
+            i, j = random.sample(range(1, len(current_route)), 2)
+            new_route = current_route[:]
+            new_route[i], new_route[j] = new_route[j], new_route[i]
+            new_distance = distance(new_route)
+            
+            if new_distance < current_distance or random.random() < math.exp((current_distance - new_distance) / T):
+                current_route, current_distance = new_route, new_distance
+            
+            T *= alpha
+        
+        return current_route, current_distance
 
+    def find_nodes_within_radius(self, target, radius):
+        target_lon, target_lat = self.nodes.loc[self.nodes['Town'] == target, ['Longitude', 'Latitude']].values[0]
+        nodes_within_radius = [
+            row['Town'] for index, row in self.nodes.iterrows()
+            if self.haversine_distance(target_lon, target_lat, row['Longitude'], row['Latitude']) <= float(radius)
+        ]
+        return nodes_within_radius
 
+    def visualize_vaccination_path(self, path):
+        def draw_grid():
+            screen.fill((0, 0, 0))
+            for edge in self.G.edges:
+                pygame.draw.line(screen, (128, 128, 128), pos_scaled[edge[0]], pos_scaled[edge[1]], 1)
+            for node in self.G.nodes:
+                color = (255, 255, 255)
+                pygame.draw.circle(screen, color, pos_scaled[node], node_radius)
+                text_surface = font.render(node, True, (255, 255, 255))
+                screen.blit(text_surface, (pos_scaled[node][0] + node_radius, pos_scaled[node][1] + node_radius))
+            pygame.display.flip()
+
+        def draw_path(path):
+            for i in range(len(path) - 1):
+                pygame.draw.line(screen, (0, 255, 0), pos_scaled[path[i]], pos_scaled[path[i + 1]], 3)
+                pygame.display.flip()
+                time.sleep(0.5)
+
+        grid_size = 28
+        node_radius = 14
+        screen_width = 1600
+        screen_height = 1200
+
+        pygame.init()
+        screen = pygame.display.set_mode((screen_width, screen_height))
+        x = round((screen_w - screen_width) / 2)
+        y = round((screen_h - screen_height) / 2 * 0.8)
+        SetWindowPos(pygame.display.get_wm_info()['window'], -1, x, y, 0, 0, 1)
+        pygame.display.set_caption("Vaccination Path Visualization")
+        font = pygame.font.SysFont(None, 20)
+
+        pos = nx.get_node_attributes(self.G, 'pos')
+        min_lon = min(pos[node][0] for node in pos)
+        max_lon = max(pos[node][0] for node in pos)
+        min_lat = min(pos[node][1] for node in pos)
+        max_lat = max(pos[node][1] for node in pos)
+
+        pos_scaled = {node: (int((lon - min_lon) / (max_lon - min_lon) * (screen_width - 40) + 20),
+                             int((lat - min_lat) / (max_lat - min_lat) * (screen_height - 40) + 20))
+                      for node, (lon, lat) in pos.items()}
+
+        draw_grid()
+        draw_path(path)
+
+        while True:
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    pygame.quit()
+                    return
+
+    def run_vaccination(self, target_town, radius):
+        nodes_within_radius = self.find_nodes_within_radius(target_town, radius)
+        if target_town not in nodes_within_radius:
+            nodes_within_radius.insert(0, target_town)
+
+        print(f"Nodes within radius: {nodes_within_radius}")
+
+        start_time = time.time()
+        path, distance = self.simulated_annealing(nodes_within_radius, target_town)
+        end_time = time.time()
+        elapsed_time = end_time - start_time
+
+        print(f"Vaccination Path: {' -> '.join(path)}")
+        print(f"Total Distance: {distance:.2f} km")
+        print(f"Elapsed Time: {elapsed_time:.4f} seconds")
+
+        self.visualize_vaccination_path(path)
 
 if __name__ == "__main__":
     input_prompt = input(f"Would you like to {BRIGHT_BLUE}{UNDERLINE}load edges and nodes?{RESET}{BLUE} [y/n]{RESET} ")
@@ -374,5 +523,6 @@ if __name__ == "__main__":
         bidirectional = bidirectional_flag.lower() == 'y'
         
         response_manager.a_star_timed(start_town, target_town, bidirectional)
+        response_manager.run_vaccination(target_town, radius)
     else:
         print(RED + "Exiting..." + RESET)
