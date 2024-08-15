@@ -91,9 +91,16 @@ class PangobatResponseManager:
         print(f"{BRIGHT_RED}{UNDERLINE}Infected Towns:{RESET} {RED}{self.infected_towns}{RESET}")
         
     def time_algorithm(self, algorithm_name, func, *args, **kwargs):
-        start_time = time.time()
-        func(*args, **kwargs)
-        end_time = time.time()
+        if algorithm_name == 'Held-Karp':
+            start_time = time.time()
+            path, distance = func(*args, **kwargs)
+            end_time = time.time()
+            print(f"Vaccination Path: {' -> '.join(path)}")
+            print(f"Total Distance: {distance:.2f} km")
+        else:
+            start_time = time.time()
+            func(*args, **kwargs)
+            end_time = time.time()
         elapsed_time = end_time - start_time
         print(f"{algorithm_name} took {elapsed_time:.4f} seconds.")
 
@@ -251,6 +258,7 @@ class PangobatResponseManager:
                 self.tt = target
                 self.tp = path
                 self.tc = came_from
+                print(f"{BRIGHT_GREEN}A* Path from {start} to {target}: {' -> '.join(path)}{RESET}")
                 return path
 
             visited.add(current_node)
@@ -337,8 +345,8 @@ class PangobatResponseManager:
         path = path_start + path_target[1:]
 
         # Print the nodes visited by each A* search
-        print(f"{BRIGHT_GREEN}Nodes visited by A* search from {start}: {', '.join(visited_start)}{RESET}")
-        print(f"{BRIGHT_GREEN}Nodes visited by A* search from {target}: {', '.join(visited_target)}{RESET}")
+        print(f"{BRIGHT_GREEN}Nodes visited by Bi-A* search from {start}: {', '.join(visited_start)}{RESET}")
+        print(f"{BRIGHT_GREEN}Nodes visited by Bi-A* search from {target}: {', '.join(visited_target)}{RESET}")
 
         # Print the combined path
         print(f"{BRIGHT_GREEN}Combined Path from {start} to {target}: {' -> '.join(path)}{RESET}")
@@ -482,17 +490,8 @@ class PangobatResponseManager:
             nodes_within_radius.insert(0, target_town)
 
         print(f"Nodes within radius: {nodes_within_radius}")
+        response_manager.time_algorithm('Held-Karp', self.simulated_annealing, nodes_within_radius, target_town)
 
-        start_time = time.time()
-        path, distance = self.simulated_annealing(nodes_within_radius, target_town)
-        end_time = time.time()
-        elapsed_time = end_time - start_time
-
-        print(f"Vaccination Path: {' -> '.join(path)}")
-        print(f"Total Distance: {distance:.2f} km")
-        print(f"Elapsed Time: {elapsed_time:.4f} seconds")
-
-        self.visualize_vaccination_path(path)
 
 if __name__ == "__main__":
     input_prompt = input(f"Would you like to {BRIGHT_BLUE}{UNDERLINE}load edges and nodes?{RESET}{BLUE} [y/n]{RESET} ")
