@@ -97,6 +97,7 @@ class PangobatResponseManager:
             end_time = time.time()
             print(f"Vaccination Path: {' -> '.join(path)}")
             print(f"Total Distance: {distance:.2f} km")
+            response_manager.visualize_vaccination_path(path)
         else:
             start_time = time.time()
             func(*args, **kwargs)
@@ -341,18 +342,21 @@ class PangobatResponseManager:
         path_start = reconstruct_path(came_from_start, meeting_node)
         path_target = reconstruct_path(came_from_target, meeting_node)
         path_target.reverse()
-
         path = path_start + path_target[1:]
 
         # Print the nodes visited by each A* search
-        print(f"{BRIGHT_GREEN}Nodes visited by Bi-A* search from {start}: {', '.join(visited_start)}{RESET}")
-        print(f"{BRIGHT_GREEN}Nodes visited by Bi-A* search from {target}: {', '.join(visited_target)}{RESET}")
+        print(f"{BRIGHT_GREEN}Nodes visited by Bi-A* 1 search from {start}: {', '.join(path_start)}{RESET}")
+        print(f"{BRIGHT_GREEN}Nodes visited by Bi-A* 2 search from {target}: {', '.join(path_target)}{RESET}")
 
         # Print the combined path
-        print(f"{BRIGHT_GREEN}Combined Path from {start} to {target}: {' -> '.join(path)}{RESET}")
+        print(f"{BRIGHT_GREEN}Combined Path [Bi-A 1&2] from {start} to {target}: {' -> '.join(path)}{RESET}")
         self.ts = start
         self.tt = target
         self.tp = path
+        #print(came_from_start)
+        #came_from_target = {v: k for k, v in came_from_target.items() if k != target_town and v != target_town}
+        #print(came_from_target)
+        #TODO: FIX THIS
         self.tc = {**came_from_start, **came_from_target}
     def held_karp(self, nodes_within_radius, start):
         n = len(nodes_within_radius)
