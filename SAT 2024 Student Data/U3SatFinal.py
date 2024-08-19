@@ -425,11 +425,12 @@ class PangobatResponseManager:
         """
         start_time = sec.time()
         self.all_teams_route = self.dijkstra_combined('Bendigo', self.target_site)
-        end_time = sec.time()
         print("Task 1 - All Teams:")
         print("Path:", self.all_teams_route['path'])
         print("Total Distance:", self.all_teams_route['distance'])
         print("Total Time:", self.all_teams_route['time'])
+        end_time = sec.time()
+        print(end_time-start_time)
         print("Run Time:", self.nano(end_time - start_time), "seconds")
         self.visualize_task_1()
         print()
@@ -583,7 +584,7 @@ response_manager.visualize_graph()
 target_site = 'Rye'
 response_manager.target_site = target_site
 
-radius = 500
+radius = 300
 
 # Executing tasks
 response_manager.task_1()

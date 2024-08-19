@@ -26,7 +26,7 @@ screen_w, screen_h = root.winfo_screenwidth(), root.winfo_screenheight()
 BLACK = '\033[30m'
 RED = '\033[31m'
 GREEN = '\033[32m'
-YELLOW = '\033[33m'  # orange on some systems
+YELLOW = '\033[33m'  #orange on some systems
 BLUE = '\033[34m'
 MAGENTA = '\033[35m'
 CYAN = '\033[36m'
@@ -41,7 +41,7 @@ BRIGHT_CYAN = '\033[96m'
 WHITE = '\033[97m'
 BOLD = '\033[1m'
 UNDERLINE = '\033[4m'
-RESET = '\033[0m'  # called to return to standard terminal text color
+RESET = '\033[0m'  
 
 class PangobatResponseManager:
     def __init__(self, edges_file, nodes_file):
@@ -56,6 +56,11 @@ class PangobatResponseManager:
         self.tt = None
         self.tp = None
         self.tc = None
+
+        self.grid_size = 28
+        self.node_radius = 14
+        self.screen_width = 1600
+        self.screen_height = 1200
 
     def load_data(self):
         self.edges = pd.read_csv(self.edges_file, header=0, names=['Town1', 'Town2', 'Distance', 'Time'])
@@ -91,7 +96,7 @@ class PangobatResponseManager:
         print(f"{BRIGHT_RED}{UNDERLINE}Infected Towns:{RESET} {RED}{self.infected_towns}{RESET}")
         
     def time_algorithm(self, algorithm_name, func, *args, **kwargs):
-        if algorithm_name == 'Held-Karp':
+        if algorithm_name == 'NN Annealing':
             start_time = time.time()
             path, distance = func(*args, **kwargs)
             end_time = time.time()
@@ -128,7 +133,7 @@ class PangobatResponseManager:
                         best_time = df.loc[df['Algorithm'] == algorithm_name, 'Time'].values[0]
                         if elapsed_time < best_time:
                             df.loc[df['Algorithm'] == algorithm_name, 'Time'] = elapsed_time
-                            print(f"{YELLOW}Previous best {RESET} time was {BRIGHT_YELLOW}{UNDERLINE}{best_time} seconds{RESET}. Updated best time for {UNDERLINE}{algorithm_name}{RESET} to {BRIGHT_GREEN}{elapsed_time:.4f} seconds{RESET}.")
+                            print(f"{YELLOW}Previous best {RESET}time was {BRIGHT_YELLOW}{UNDERLINE}{best_time} seconds{RESET}. Updated best time for {UNDERLINE}{MAGENTA}{algorithm_name}{RESET} to {BRIGHT_GREEN}{elapsed_time:.4f} seconds{RESET}.")
                         else:
                             print(f"{RED}No improvement{RESET} for {YELLOW}{algorithm_name}{RESET}. Best time remains {BRIGHT_YELLOW}{UNDERLINE}{best_time:.4f} seconds{RESET}.")
                     else:
@@ -187,10 +192,10 @@ class PangobatResponseManager:
                     color = (0, 255, 0)
                 elif node in came_from:
                     color = (0, 0, 255)
-                pygame.draw.circle(screen, color, pos_scaled[node], node_radius)
+                pygame.draw.circle(screen, color, pos_scaled[node], self.node_radius)
                 # Draw node labels
                 text_surface = font.render(node, True, (255, 255, 255))
-                screen.blit(text_surface, (pos_scaled[node][0] + node_radius, pos_scaled[node][1] + node_radius))
+                screen.blit(text_surface, (pos_scaled[node][0] + self.node_radius, pos_scaled[node][1] + self.node_radius))
             pygame.display.flip()
     
         def draw_path():
@@ -200,16 +205,10 @@ class PangobatResponseManager:
                     pygame.display.flip()
                     time.sleep(0.5)
     
-        # Grid and Pygame settings
-        grid_size = 28
-        node_radius = 14
-        screen_width = 1600
-        screen_height = 1200
-    
         pygame.init()
-        screen = pygame.display.set_mode((screen_width, screen_height))
-        x = round((screen_w - screen_width) / 2)
-        y = round((screen_h - screen_height) / 2 * 0.8)
+        screen = pygame.display.set_mode((self.screen_width, self.screen_height))
+        x = round((screen_w - self.screen_width) / 2)
+        y = round((screen_h - self.screen_height) / 2 * 0.8)
         SetWindowPos(pygame.display.get_wm_info()['window'], -1, x, y, 0, 0, 1)
         pygame.display.set_caption("A* Algorithm Visualization")
         font = pygame.font.SysFont(None, 20)
@@ -220,8 +219,8 @@ class PangobatResponseManager:
         min_lat = min(pos[node][1] for node in pos)
         max_lat = max(pos[node][1] for node in pos)
     
-        pos_scaled = {node: (int((lon - min_lon) / (max_lon - min_lon) * (screen_width - 40) + 20), 
-                             int((lat - min_lat) / (max_lat - min_lat) * (screen_height - 40) + 20)) 
+        pos_scaled = {node: (int((lon - min_lon) / (max_lon - min_lon) * (self.screen_width - 40) + 20), 
+                             int((lat - min_lat) / (max_lat - min_lat) * (self.screen_height - 40) + 20)) 
                       for node, (lon, lat) in pos.items()}
     
         draw_grid()
@@ -353,54 +352,33 @@ class PangobatResponseManager:
         self.ts = start
         self.tt = target
         self.tp = path
-        #print(came_from_start)
-        #came_from_target = {v: k for k, v in came_from_target.items() if k != target_town and v != target_town}
-        #print(came_from_target)
+        missing = list(set(came_from_start).intersection(came_from_target))
         #TODO: FIX THIS
         self.tc = {**came_from_start, **came_from_target}
-    def held_karp(self, nodes_within_radius, start):
-        n = len(nodes_within_radius)
-        all_nodes = range(n)
-        start_index = nodes_within_radius.index(start)
-        dist = lambda i, j: self.haversine_distance(
-            self.nodes.loc[self.nodes['Town'] == nodes_within_radius[i], 'Longitude'].values[0],
-            self.nodes.loc[self.nodes['Town'] == nodes_within_radius[i], 'Latitude'].values[0],
-            self.nodes.loc[self.nodes['Town'] == nodes_within_radius[j], 'Longitude'].values[0],
-            self.nodes.loc[self.nodes['Town'] == nodes_within_radius[j], 'Latitude'].values[0]
-        )
-        
-        memo = {}
-        for k in all_nodes:
-            if k != start_index:
-                memo[(1 << k, k)] = dist(start_index, k)
-        
-        for subset_size in range(2, n):
-            for subset in itertools.combinations([x for x in all_nodes if x != start_index], subset_size):
-                bits = 1 << start_index
-                for bit in subset:
-                    bits |= 1 << bit
-                for k in subset:
-                    prev_bits = bits & ~(1 << k)
-                    result = float('inf')
-                    for m in subset:
-                        if m == k:
-                            continue
-                        new_distance = memo[(prev_bits, m)] + dist(m, k)
-                        if new_distance < result:
-                            result = new_distance
-                    memo[(bits, k)] = result
-        
-        bits = (1 << n) - 1
-        result = float('inf')
-        for k in all_nodes:
-            if k == start_index:
-                continue
-            new_distance = memo[(bits, k)] + dist(k, start_index)
-            if new_distance < result:
-                result = new_distance
-        return result
+
+    def nearest_neighbor(self, start, nodes):
+        unvisited = set(nodes)
+        route = [start]
+        unvisited.remove(start)
+
+        current_node = start
+        while unvisited:
+            next_node = min(unvisited, key=lambda node: self.haversine_distance(
+                self.nodes.loc[self.nodes['Town'] == current_node, 'Longitude'].values[0],
+                self.nodes.loc[self.nodes['Town'] == current_node, 'Latitude'].values[0],
+                self.nodes.loc[self.nodes['Town'] == node, 'Longitude'].values[0],
+                self.nodes.loc[self.nodes['Town'] == node, 'Latitude'].values[0]
+            ))
+            route.append(next_node)
+            unvisited.remove(next_node)
+            current_node = next_node
+
+        route.append(start)  # Return to the starting node
+        return route
 
     def simulated_annealing(self, nodes_within_radius, start):
+        initial_route = self.nearest_neighbor(start, nodes_within_radius)
+        print("Initial route: ", initial_route)
         def distance(route):
             return sum(self.haversine_distance(
                 self.nodes.loc[self.nodes['Town'] == route[i], 'Longitude'].values[0],
@@ -409,16 +387,14 @@ class PangobatResponseManager:
                 self.nodes.loc[self.nodes['Town'] == route[i + 1], 'Latitude'].values[0]
             ) for i in range(len(route) - 1))
         
-        current_route = nodes_within_radius[:]
-        current_route.remove(start)
-        current_route.insert(0, start)
+        current_route = initial_route[:]
         current_distance = distance(current_route)
         T = 1.0
         T_min = 0.00001
         alpha = 0.995
         
         while T > T_min:
-            i, j = random.sample(range(1, len(current_route)), 2)
+            i, j = random.sample(range(1, len(current_route) - 1), 2)  # Avoid swapping the first and last nodes
             new_route = current_route[:]
             new_route[i], new_route[j] = new_route[j], new_route[i]
             new_distance = distance(new_route)
@@ -445,9 +421,9 @@ class PangobatResponseManager:
                 pygame.draw.line(screen, (128, 128, 128), pos_scaled[edge[0]], pos_scaled[edge[1]], 1)
             for node in self.G.nodes:
                 color = (255, 255, 255)
-                pygame.draw.circle(screen, color, pos_scaled[node], node_radius)
+                pygame.draw.circle(screen, color, pos_scaled[node], self.node_radius)
                 text_surface = font.render(node, True, (255, 255, 255))
-                screen.blit(text_surface, (pos_scaled[node][0] + node_radius, pos_scaled[node][1] + node_radius))
+                screen.blit(text_surface, (pos_scaled[node][0] + self.node_radius, pos_scaled[node][1] + self.node_radius))
             pygame.display.flip()
 
         def draw_path(path):
@@ -456,15 +432,10 @@ class PangobatResponseManager:
                 pygame.display.flip()
                 time.sleep(0.5)
 
-        grid_size = 28
-        node_radius = 14
-        screen_width = 1600
-        screen_height = 1200
-
         pygame.init()
-        screen = pygame.display.set_mode((screen_width, screen_height))
-        x = round((screen_w - screen_width) / 2)
-        y = round((screen_h - screen_height) / 2 * 0.8)
+        screen = pygame.display.set_mode((self.screen_width, self.screen_height))
+        x = round((screen_w - self.screen_width) / 2)
+        y = round((screen_h - self.screen_height) / 2 * 0.8)
         SetWindowPos(pygame.display.get_wm_info()['window'], -1, x, y, 0, 0, 1)
         pygame.display.set_caption("Vaccination Path Visualization")
         font = pygame.font.SysFont(None, 20)
@@ -475,8 +446,8 @@ class PangobatResponseManager:
         min_lat = min(pos[node][1] for node in pos)
         max_lat = max(pos[node][1] for node in pos)
 
-        pos_scaled = {node: (int((lon - min_lon) / (max_lon - min_lon) * (screen_width - 40) + 20),
-                             int((lat - min_lat) / (max_lat - min_lat) * (screen_height - 40) + 20))
+        pos_scaled = {node: (int((lon - min_lon) / (max_lon - min_lon) * (self.screen_width - 40) + 20),
+                             int((lat - min_lat) / (max_lat - min_lat) * (self.screen_height - 40) + 20))
                       for node, (lon, lat) in pos.items()}
 
         draw_grid()
@@ -494,9 +465,8 @@ class PangobatResponseManager:
             nodes_within_radius.insert(0, target_town)
 
         print(f"Nodes within radius: {nodes_within_radius}")
-        response_manager.time_algorithm('Held-Karp', self.simulated_annealing, nodes_within_radius, target_town)
-
-
+        response_manager.time_algorithm('NN Annealing', self.simulated_annealing, nodes_within_radius, target_town)
+        
 if __name__ == "__main__":
     input_prompt = input(f"Would you like to {BRIGHT_BLUE}{UNDERLINE}load edges and nodes?{RESET}{BLUE} [y/n]{RESET} ")
     if input_prompt.lower() == 'y':
