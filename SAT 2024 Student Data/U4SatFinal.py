@@ -57,6 +57,9 @@ class PangobatResponseManager:
         self.tp = None
         self.tc = None
 
+        self.total_time = None
+        self.total_distance = None
+        
         self.grid_size = 28
         self.node_radius = 14
         self.screen_width = 1600
@@ -159,7 +162,13 @@ class PangobatResponseManager:
             self.time_algorithm('Bidirectional A*', self.bidirectional_a_star, start, target, self.heuristic)
         else:
             self.time_algorithm('A*', self.a_star_algorithm_internal, start, target)
-        self.visualize_path(self.ts,self.tt,self.tp,self.tc)
+
+        print(f"Algorithm: {'Bidirectional A*' if use_bidirectional else 'A*'}")
+        print(f"Total Distance: {self.total_distance:.2f} km")
+        print(f"Total Time: {self.total_time:.2f} minutes")
+
+        self.visualize_path(self.ts, self.tt, self.tp, self.tc)
+
         
     def visualize_graph(self):
         plt.figure(figsize=(12, 8))
@@ -242,6 +251,7 @@ class PangobatResponseManager:
         heapq.heapify(frontier)
         came_from = {}
         cost_so_far = {start: 0}
+        time_so_far = {start: 0}
         visited = set()
 
         while frontier:
@@ -249,6 +259,8 @@ class PangobatResponseManager:
 
             if current_node == target:
                 path = []
+                self.total_time = time_so_far[current_node]
+                self.total_distance = cost_so_far[current_node]
                 while current_node != start:
                     path.append(current_node)
                     current_node = came_from[current_node]
@@ -259,34 +271,40 @@ class PangobatResponseManager:
                 self.tp = path
                 self.tc = came_from
                 print(f"{BRIGHT_GREEN}A* Path from {start} to {target}: {' -> '.join(path)}{RESET}")
-                return path
+                return path, self.total_distance, self.total_time
 
             visited.add(current_node)
 
             for neighbor in self.G.neighbors(current_node):
                 new_cost = cost_so_far[current_node] + self.G[current_node][neighbor]['distance']
-
+                new_time = time_so_far[current_node] + self.G[current_node][neighbor]['time']
                 if neighbor not in cost_so_far or new_cost < cost_so_far[neighbor]:
                     cost_so_far[neighbor] = new_cost
+                    time_so_far[neighbor] = new_time
                     priority = new_cost + heuristic(neighbor, target)
                     heapq.heappush(frontier, (priority, neighbor))
                     came_from[neighbor] = current_node
 
         return None
 
-    def bidirectional_a_star(self, start, target, heuristic):
+    def bidirectional_a_star(self, start, target, heuristic):    
         def reconstruct_path(came_from, current):
             path = [current]
+            self.total_distance = 0
+            self.total_time = 0
             while current in came_from:
-                current = came_from[current]
+                next_node = came_from[current]
+                self.total_distance += self.G[current][next_node]['distance']
+                self.total_time += self.G[current][next_node]['time']
+                current = next_node
                 path.append(current)
-            return path[::-1]
-
+            return path[::-1], self.total_distance, self.total_time
+        
         open_set_start = [(0, start)]
         open_set_target = [(0, target)]
         heapq.heapify(open_set_start)
         heapq.heapify(open_set_target)
-
+        
         came_from_start = {}
         came_from_target = {}
         g_score_start = {node: float('inf') for node in self.G.nodes}
@@ -338,23 +356,24 @@ class PangobatResponseManager:
             print(f"No path found between {start} and {target}.")
             return
 
-        path_start = reconstruct_path(came_from_start, meeting_node)
-        path_target = reconstruct_path(came_from_target, meeting_node)
+        path_start, total_distance_start, total_time_start = reconstruct_path(came_from_start, meeting_node)
+        path_target, total_distance_target, total_time_target = reconstruct_path(came_from_target, meeting_node)
         path_target.reverse()
+        
         path = path_start + path_target[1:]
+        self.total_distance = total_distance_start + total_distance_target
+        self.total_time = total_time_start + total_time_target
 
-        # Print the nodes visited by each A* search
         print(f"{BRIGHT_GREEN}Nodes visited by Bi-A* 1 search from {start}: {', '.join(path_start)}{RESET}")
         print(f"{BRIGHT_GREEN}Nodes visited by Bi-A* 2 search from {target}: {', '.join(path_target)}{RESET}")
-
-        # Print the combined path
         print(f"{BRIGHT_GREEN}Combined Path [Bi-A 1&2] from {start} to {target}: {' -> '.join(path)}{RESET}")
+        
         self.ts = start
         self.tt = target
         self.tp = path
-        missing = list(set(came_from_start).intersection(came_from_target))
-        #TODO: FIX THIS
         self.tc = {**came_from_start, **came_from_target}
+        return path, self.total_distance, self.total_time
+
 
     def nearest_neighbor(self, start, nodes):
         unvisited = set(nodes)
