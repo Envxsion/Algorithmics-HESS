@@ -1,3 +1,16 @@
+'''
+Include in report:
+Shortest path to speed trade off
+Easier to precompute path using bellman than calculate it every time [need to store data tho, storage]
+A* used in google maps, good enough substitute for navigation by road
+since its only 1 city, we can figure out how good A* is than dijkstras well before an emergency
+fuel, rest stops for fatigued wrokers (tsp)
+pre compute fuel to milage on one gas
+rotational shifts of employees
+tolerance for unpredictable failure (if vehicle breaks down, do we change other cars routes in real time if they're gone)
+no multithreading in python but bi dir could benefit from it, hence rust or c are better candidates (Global Interpreter Lock, prevents multiprocessing)
+'''
+
 from matplotlib import pyplot as plt
 import os
 import pandas as pd
@@ -105,15 +118,15 @@ class PangobatResponseManager:
             start_time = time.time()
             path, distance = func(*args, **kwargs)
             end_time = time.time()
-            print(f"Vaccination Path: {' -> '.join(path)}")
-            print(f"Total Distance: {distance:.2f} km")
+            print(f"{BRIGHT_GREEN}{UNDERLINE}Vaccination Path: {' -> '.join(path)}{RESET}")
+            print(f"Total Distance: {BRIGHT_YELLOW}{UNDERLINE}{distance:.2f} km{RESET}")
             response_manager.visualize_vaccination_path(path)
         else:
             start_time = time.time()
             func(*args, **kwargs)
             end_time = time.time()
         elapsed_time = end_time - start_time
-        print(f"{algorithm_name} took {elapsed_time:.4f} seconds.")
+        print(f"{algorithm_name} took {BRIGHT_YELLOW}{UNDERLINE}{elapsed_time:.4f} seconds.{RESET}")
 
         # Read or create the lastbest.csv file
         if not os.path.exists(self.last_best_file):
@@ -164,10 +177,8 @@ class PangobatResponseManager:
             self.time_algorithm('Bidirectional A*', self.bidirectional_a_star, start, target, self.heuristic)
         else:
             self.time_algorithm('A*', self.a_star_algorithm_internal, start, target)
-
-        print(f"Algorithm: {'Bidirectional A*' if use_bidirectional else 'A*'}")
-        print(f"Total Distance: {self.total_distance:.2f} km")
-        print(f"Total Time: {self.total_time:.2f} minutes")
+        print(f"Total Distance: {BRIGHT_YELLOW}{UNDERLINE}{self.total_distance:.2f} km{RESET}")
+        print(f"Total Time: {BRIGHT_YELLOW}{UNDERLINE}{self.total_time:.2f} minutes{RESET}")
 
         self.visualize_path(self.ts, self.tt, self.tp, self.tc)
 
@@ -404,6 +415,7 @@ class PangobatResponseManager:
         valid_route.append(start)  
         return valid_route
 
+    
 
     def simulated_annealing(self, nodes_within_radius, start):
         initial_route = self.nearest_neighbor(start, nodes_within_radius)
@@ -416,7 +428,7 @@ class PangobatResponseManager:
                 self.nodes.loc[self.nodes['Town'] == route[i + 1], 'Longitude'].values[0],
                 self.nodes.loc[self.nodes['Town'] == route[i + 1], 'Latitude'].values[0]
             ) for i in range(len(route) - 1))
-
+        
         current_route = initial_route[:]
         current_distance = distance(current_route)
         T = 10 #Default: 1.0 <10> | Increase temp to explore larger portion of sol space
@@ -462,8 +474,18 @@ class PangobatResponseManager:
             screen.fill((0, 0, 0))
             for edge in self.G.edges:
                 pygame.draw.line(screen, (128, 128, 128), pos_scaled[edge[0]], pos_scaled[edge[1]], 1)
+                # Labels
+                edge_midpoint = ((pos_scaled[edge[0]][0] + pos_scaled[edge[1]][0]) // 2, 
+                                 (pos_scaled[edge[0]][1] + pos_scaled[edge[1]][1]) // 2)
+                distance = self.G[edge[0]][edge[1]]['distance']
+                text_surface = font.render(str(distance), True, (255, 255, 255))
+                screen.blit(text_surface, edge_midpoint)
             for node in self.G.nodes:
                 color = (255, 255, 255)
+                if node == path[0]:
+                    color = (255, 0, 0)
+                elif node in path:
+                    color = (255, 230, 3)
                 pygame.draw.circle(screen, color, pos_scaled[node], self.node_radius)
                 text_surface = font.render(node, True, (255, 255, 255))
                 screen.blit(text_surface, (pos_scaled[node][0] + self.node_radius, pos_scaled[node][1] + self.node_radius))
