@@ -56,6 +56,8 @@ class PangobatResponseManager:
         self.tt = None
         self.tp = None
         self.tc = None
+        
+        self.radius = None
 
         self.total_time = None
         self.total_distance = None
@@ -374,7 +376,6 @@ class PangobatResponseManager:
         self.tc = {**came_from_start, **came_from_target}
         return path, self.total_distance, self.total_time
 
-
     def nearest_neighbor(self, start, nodes):
         unvisited = set(nodes)
         route = [start]
@@ -392,12 +393,22 @@ class PangobatResponseManager:
             unvisited.remove(next_node)
             current_node = next_node
 
-        route.append(start)  # Return to the starting node
-        return route
+        valid_route = [route[0]]
+        for i in range(1, len(route)):
+            if self.G.has_edge(valid_route[-1], route[i]):
+                valid_route.append(route[i])
+            else:
+                path, _, _ = self.a_star_algorithm_internal(valid_route[-1], route[i])
+                valid_route.extend(path[1:]) 
+
+        valid_route.append(start)  
+        return valid_route
+
 
     def simulated_annealing(self, nodes_within_radius, start):
         initial_route = self.nearest_neighbor(start, nodes_within_radius)
         print("Initial route: ", initial_route)
+
         def distance(route):
             return sum(self.haversine_distance(
                 self.nodes.loc[self.nodes['Town'] == route[i], 'Longitude'].values[0],
@@ -405,25 +416,38 @@ class PangobatResponseManager:
                 self.nodes.loc[self.nodes['Town'] == route[i + 1], 'Longitude'].values[0],
                 self.nodes.loc[self.nodes['Town'] == route[i + 1], 'Latitude'].values[0]
             ) for i in range(len(route) - 1))
-        
+
         current_route = initial_route[:]
         current_distance = distance(current_route)
         T = 1.0
         T_min = 0.00001
         alpha = 0.995
-        
+
         while T > T_min:
             i, j = random.sample(range(1, len(current_route) - 1), 2)  # Avoid swapping the first and last nodes
             new_route = current_route[:]
             new_route[i], new_route[j] = new_route[j], new_route[i]
             new_distance = distance(new_route)
-            
+
             if new_distance < current_distance or random.random() < math.exp((current_distance - new_distance) / T):
                 current_route, current_distance = new_route, new_distance
-            
+
             T *= alpha
-        
-        return current_route, current_distance
+
+        #Validity check
+        valid_route = [current_route[0]]
+        for i in range(1, len(current_route)):
+            if self.G.has_edge(valid_route[-1], current_route[i]):
+                valid_route.append(current_route[i])
+            else:
+                
+                path, _, _ = self.a_star_algorithm_internal(valid_route[-1], current_route[i])
+                valid_route.extend(path[1:])
+
+        valid_route.append(start)
+        final_distance = distance(valid_route)
+        return valid_route, final_distance
+
 
     def find_nodes_within_radius(self, target, radius):
         target_lon, target_lat = self.nodes.loc[self.nodes['Town'] == target, ['Longitude', 'Latitude']].values[0]
@@ -508,6 +532,7 @@ if __name__ == "__main__":
             print(f"{GREEN}All towns: {', '.join(all_towns)}{RESET}")
             target_town = input(f"{UNDERLINE}Enter Choice:{RESET} ")
         radius = input(f"{YELLOW}Enter search radius:{RESET} ")
+        response_manager.radius = radius
         response_manager.identify_infected_towns()
         start_town = "Bendigo"
 
