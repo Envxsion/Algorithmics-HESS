@@ -419,9 +419,9 @@ class PangobatResponseManager:
 
         current_route = initial_route[:]
         current_distance = distance(current_route)
-        T = 1.0
-        T_min = 0.00001
-        alpha = 0.995
+        T = 1000 #1.0
+        T_min = 1  #0.00001
+        alpha = 0.9 #0.995
 
         while T > T_min:
             i, j = random.sample(range(1, len(current_route) - 1), 2)  # Avoid swapping the first and last nodes
