@@ -222,10 +222,16 @@ class PangobatResponseManager:
     
         def draw_path():
             for current in path:
-                if current in came_from:
+                if current in came_from and isinstance(came_from[current], list):
+                    # Draw lines for nodes with multiple parents
+                    for parent in came_from[current]:
+                        pygame.draw.line(screen, (0, 255, 0), pos_scaled[current], pos_scaled[parent], 3)
+                elif current in came_from:
+                    # Draw a single line for nodes with one parent
                     pygame.draw.line(screen, (0, 255, 0), pos_scaled[current], pos_scaled[came_from[current]], 3)
-                    pygame.display.flip()
-                    time.sleep(0.5)
+                pygame.display.flip()
+                time.sleep(0.5)
+
     
         pygame.init()
         screen = pygame.display.set_mode((self.screen_width, self.screen_height))
@@ -381,10 +387,15 @@ class PangobatResponseManager:
         print(f"{BRIGHT_GREEN}Nodes visited by Bi-A* 2 search from {target}: {', '.join(path_target)}{RESET}")
         print(f"{BRIGHT_GREEN}Combined Path [Bi-A 1&2] from {start} to {target}: {' -> '.join(path)}{RESET}")
         
+        merged_dict = {
+            key: [came_from_start[key], came_from_target[key]] if key in came_from_start and key in came_from_target else came_from_start.get(key, came_from_target.get(key))
+            for key in came_from_start.keys() | came_from_target.keys()
+            }
+        print(merged_dict)
         self.ts = start
         self.tt = target
         self.tp = path
-        self.tc = {**came_from_start, **came_from_target}
+        self.tc = merged_dict #{**came_from_start, **came_from_target}
         return path, self.total_distance, self.total_time
 
     def nearest_neighbor(self, start, nodes):
