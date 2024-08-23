@@ -1,16 +1,3 @@
-'''
-Include in report:
-Shortest path to speed trade off
-Easier to precompute path using bellman than calculate it every time [need to store data tho, storage]
-A* used in google maps, good enough substitute for navigation by road
-since its only 1 city, we can figure out how good A* is than dijkstras well before an emergency
-fuel, rest stops for fatigued wrokers (tsp)
-pre compute fuel to milage on one gas
-rotational shifts of employees
-tolerance for unpredictable failure (if vehicle breaks down, do we change other cars routes in real time if they're gone)
-no multithreading in python but bi dir could benefit from it, hence rust or c are better candidates (Global Interpreter Lock, prevents multiprocessing)
-'''
-
 from matplotlib import pyplot as plt
 import os
 import pandas as pd
@@ -118,6 +105,7 @@ class PangobatResponseManager:
             start_time = time.time()
             path, distance = func(*args, **kwargs)
             end_time = time.time()
+            path=path[:-1]
             print(f"{BRIGHT_GREEN}{UNDERLINE}Vaccination Path: {' -> '.join(path)}{RESET}")
             print(f"Total Distance: {BRIGHT_YELLOW}{UNDERLINE}{distance:.2f} km{RESET}")
             response_manager.visualize_vaccination_path(path)
@@ -141,7 +129,7 @@ class PangobatResponseManager:
             try:
                 df = pd.read_csv(self.last_best_file)
                 if df.empty:
-                    # File is empty, create a new DataFrame with the current algorithm time
+                    #File is empty, create a new DataFrame with the current algorithm time
                     df = pd.DataFrame({
                         'Algorithm': [algorithm_name],
                         'Time': [elapsed_time]
@@ -164,7 +152,7 @@ class PangobatResponseManager:
 
                 df.to_csv(self.last_best_file, index=False)
             except pd.errors.EmptyDataError:
-                # File exists but is empty, create a new DataFrame with the current algorithm time
+                #File exists but is empty, create a new DataFrame with the current algorithm time
                 df = pd.DataFrame({
                     'Algorithm': [algorithm_name],
                     'Time': [elapsed_time]
@@ -181,7 +169,6 @@ class PangobatResponseManager:
         print(f"Total Time: {BRIGHT_YELLOW}{UNDERLINE}{self.total_time:.2f} minutes{RESET}")
 
         self.visualize_path(self.ts, self.tt, self.tp, self.tc)
-
         
     def visualize_graph(self):
         plt.figure(figsize=(12, 8))
@@ -254,6 +241,60 @@ class PangobatResponseManager:
         draw_grid()
         draw_path()
     
+        while True:
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    pygame.quit()
+                    return
+    def visualize_vaccination_path(self, path):
+        def draw_grid():
+            screen.fill((0, 0, 0))
+            for edge in self.G.edges:
+                pygame.draw.line(screen, (128, 128, 128), pos_scaled[edge[0]], pos_scaled[edge[1]], 1)
+                # Labels
+                edge_midpoint = ((pos_scaled[edge[0]][0] + pos_scaled[edge[1]][0]) // 2, 
+                                 (pos_scaled[edge[0]][1] + pos_scaled[edge[1]][1]) // 2)
+                distance = self.G[edge[0]][edge[1]]['distance']
+                text_surface = font.render(str(distance), True, (255, 255, 255))
+                screen.blit(text_surface, edge_midpoint)
+            for node in self.G.nodes:
+                color = (255, 255, 255)
+                if node == path[0]:
+                    color = (255, 0, 0)
+                elif node in path:
+                    color = (255, 230, 3)
+                pygame.draw.circle(screen, color, pos_scaled[node], self.node_radius)
+                text_surface = font.render(node, True, (255, 255, 255))
+                screen.blit(text_surface, (pos_scaled[node][0] + self.node_radius, pos_scaled[node][1] + self.node_radius))
+            pygame.display.flip()
+
+        def draw_path(path):
+            for i in range(len(path) - 1):
+                pygame.draw.line(screen, (0, 255, 0), pos_scaled[path[i]], pos_scaled[path[i + 1]], 3)
+                pygame.display.flip()
+                time.sleep(0.5)
+
+        pygame.init()
+        screen = pygame.display.set_mode((self.screen_width, self.screen_height))
+        x = round((screen_w - self.screen_width) / 2)
+        y = round((screen_h - self.screen_height) / 2 * 0.8)
+        SetWindowPos(pygame.display.get_wm_info()['window'], -1, x, y, 0, 0, 1)
+        pygame.display.set_caption("Vaccination Path Visualization")
+        font = pygame.font.SysFont(None, 20)
+
+        pos = nx.get_node_attributes(self.G, 'pos')
+        min_lon = min(pos[node][0] for node in pos)
+        max_lon = max(pos[node][0] for node in pos)
+        min_lat = min(pos[node][1] for node in pos)
+        max_lat = max(pos[node][1] for node in pos)
+
+        pos_scaled = {node: (int((lon - min_lon) / (max_lon - min_lon) * (self.screen_width - 40) + 20),
+                             int((lat - min_lat) / (max_lat - min_lat) * (self.screen_height - 40) + 20))
+                      for node, (lon, lat) in pos.items()}
+
+        draw_grid()
+        draw_path(path)
+
         while True:
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
@@ -442,7 +483,7 @@ class PangobatResponseManager:
         
         current_route = initial_route[:]
         current_distance = distance(current_route)
-        T = 10 #Default: 1.0 <10> | Increase temp to explore larger portion of sol space
+        T = 1 #Default: 1.0 <10> | Increase temp to explore larger portion of sol space
         T_min = 0.0001  # Default: 0.0001 <1> | Lower this for more fine-tuned solution at lower temperatures
         alpha = 0.90 # Default: 0.995 <0.90>| <0.8-0.95> Slow Cooling | <0.95-0.99> Fast Cooling | 
 
@@ -479,61 +520,6 @@ class PangobatResponseManager:
             if self.haversine_distance(target_lon, target_lat, row['Longitude'], row['Latitude']) <= float(radius)
         ]
         return nodes_within_radius
-
-    def visualize_vaccination_path(self, path):
-        def draw_grid():
-            screen.fill((0, 0, 0))
-            for edge in self.G.edges:
-                pygame.draw.line(screen, (128, 128, 128), pos_scaled[edge[0]], pos_scaled[edge[1]], 1)
-                # Labels
-                edge_midpoint = ((pos_scaled[edge[0]][0] + pos_scaled[edge[1]][0]) // 2, 
-                                 (pos_scaled[edge[0]][1] + pos_scaled[edge[1]][1]) // 2)
-                distance = self.G[edge[0]][edge[1]]['distance']
-                text_surface = font.render(str(distance), True, (255, 255, 255))
-                screen.blit(text_surface, edge_midpoint)
-            for node in self.G.nodes:
-                color = (255, 255, 255)
-                if node == path[0]:
-                    color = (255, 0, 0)
-                elif node in path:
-                    color = (255, 230, 3)
-                pygame.draw.circle(screen, color, pos_scaled[node], self.node_radius)
-                text_surface = font.render(node, True, (255, 255, 255))
-                screen.blit(text_surface, (pos_scaled[node][0] + self.node_radius, pos_scaled[node][1] + self.node_radius))
-            pygame.display.flip()
-
-        def draw_path(path):
-            for i in range(len(path) - 1):
-                pygame.draw.line(screen, (0, 255, 0), pos_scaled[path[i]], pos_scaled[path[i + 1]], 3)
-                pygame.display.flip()
-                time.sleep(0.5)
-
-        pygame.init()
-        screen = pygame.display.set_mode((self.screen_width, self.screen_height))
-        x = round((screen_w - self.screen_width) / 2)
-        y = round((screen_h - self.screen_height) / 2 * 0.8)
-        SetWindowPos(pygame.display.get_wm_info()['window'], -1, x, y, 0, 0, 1)
-        pygame.display.set_caption("Vaccination Path Visualization")
-        font = pygame.font.SysFont(None, 20)
-
-        pos = nx.get_node_attributes(self.G, 'pos')
-        min_lon = min(pos[node][0] for node in pos)
-        max_lon = max(pos[node][0] for node in pos)
-        min_lat = min(pos[node][1] for node in pos)
-        max_lat = max(pos[node][1] for node in pos)
-
-        pos_scaled = {node: (int((lon - min_lon) / (max_lon - min_lon) * (self.screen_width - 40) + 20),
-                             int((lat - min_lat) / (max_lat - min_lat) * (self.screen_height - 40) + 20))
-                      for node, (lon, lat) in pos.items()}
-
-        draw_grid()
-        draw_path(path)
-
-        while True:
-            for event in pygame.event.get():
-                if event.type == pygame.QUIT:
-                    pygame.quit()
-                    return
 
     def run_vaccination(self, target_town, radius):
         nodes_within_radius = self.find_nodes_within_radius(target_town, radius)

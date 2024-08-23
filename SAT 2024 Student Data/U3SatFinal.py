@@ -581,7 +581,7 @@ response_manager.load_data()
 response_manager.identify_infected_towns()
 response_manager.visualize_graph()
 
-target_site = 'Shepparton'
+target_site = 'Rye'
 response_manager.target_site = target_site
 
 radius = 100
